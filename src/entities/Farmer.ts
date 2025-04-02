@@ -124,4 +124,18 @@ export default class Farmer extends NPC {
     protected updateHarvesting(time: number, delta: number): void {
         // Farmer is busy harvesting, maybe play an animation later
     }
+
+    // Override the base arrival handler for specific Farmer targets
+    protected handleArrivalAtTarget(target: Phaser.Math.Vector2): void {
+        if (this.targetPlot && target.x === this.targetPlot.x && target.y === this.targetPlot.y) {
+            // Arrived at the target vineyard plot
+            this.startHarvesting();
+        } else if (target.x === this.currentScene.wineryGrapeDropOffPoint.x && target.y === this.currentScene.wineryGrapeDropOffPoint.y) {
+            // Arrived at the winery drop-off
+            this.deliverGrapes();
+        } else {
+            // Arrived at an unknown target? Go idle.
+            super.handleArrivalAtTarget(target);
+        }
+    }
 }

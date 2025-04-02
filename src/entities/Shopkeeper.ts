@@ -16,4 +16,12 @@ export default class Shopkeeper extends NPC {
     }
 
     // TODO: Add logic for buying wine from winemaker, selling to customers
+
+    // Override the base arrival handler (no specific targets yet)
+    protected handleArrivalAtTarget(target: Phaser.Math.Vector2): void {
+        // Currently, Shopkeeper only moves between home and work.
+        // Arrival at work is handled by the base NPC class setting state to Idle.
+        // If other targets were added, logic would go here.
+        super.handleArrivalAtTarget(target); // Default to going Idle
+    }
 }

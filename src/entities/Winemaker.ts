@@ -71,4 +71,19 @@ export default class Winemaker extends NPC {
         this.moveTo(this.currentScene.wineryWinePickupPoint);
         // Note: setNpcState('Idle') will be called by stopMovement when it arrives there
     }
+
+    // Override the base arrival handler for specific Winemaker targets
+    protected handleArrivalAtTarget(target: Phaser.Math.Vector2): void {
+        if (target.x === this.currentScene.shopWineDropOffPoint.x && target.y === this.currentScene.shopWineDropOffPoint.y) {
+            // Arrived at the shop drop-off
+            this.deliverWine();
+        } else if (target.x === this.currentScene.wineryWinePickupPoint.x && target.y === this.currentScene.wineryWinePickupPoint.y) {
+            // Arrived back at winery pickup point, just go idle (already handled by base stopMovement setting state to Idle)
+             console.log('Winemaker arrived back at winery pickup point.');
+             // No specific action needed here, updateIdle will check for wine
+        } else {
+            // Arrived at an unknown target? Go idle.
+            super.handleArrivalAtTarget(target);
+        }
+    }
 }
