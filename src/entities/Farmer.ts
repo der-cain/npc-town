@@ -13,6 +13,9 @@ export default class Farmer extends NPC {
 
     // Override the idle update to look for work
     protected updateIdle(time: number, delta: number): void {
+        // Explicit check, though preUpdate should handle this
+        if (this.currentState !== 'Idle') return;
+
         // If inventory is full, go deliver
         if (this.inventory && this.inventory.quantity >= this.maxInventory) {
             console.log('Farmer inventory full, moving to winery.');

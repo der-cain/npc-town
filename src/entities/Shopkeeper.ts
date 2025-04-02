@@ -9,6 +9,9 @@ export default class Shopkeeper extends NPC {
 
     // Override the idle update (will add logic later)
     protected updateIdle(time: number, delta: number): void {
+        // Explicit check
+        if (this.currentState !== 'Idle') return;
+
         // TODO: Manage shop inventory, interact with customers
     }
 

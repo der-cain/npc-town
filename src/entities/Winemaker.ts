@@ -11,6 +11,9 @@ export default class Winemaker extends NPC {
 
     // Override the idle update
     protected updateIdle(time: number, delta: number): void {
+        // Explicit check
+        if (this.currentState !== 'Idle') return;
+
         // Check if winery has a full batch available and we have no inventory
         if (this.currentScene.wineryLogic.wineInventory >= this.batchSize && this.inventory === null) {
             console.log(`Winemaker found batch of ${this.batchSize} wine available.`);

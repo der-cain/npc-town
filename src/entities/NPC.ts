@@ -9,7 +9,8 @@ export type NpcState =
     | 'Harvesting'
     | 'Delivering'
     | 'Producing'
-    | 'Selling';
+    | 'Selling'
+    | 'Resting'; // Added resting state
 
 const NPC_SPEED = 80; // Pixels per second
 
@@ -54,8 +55,18 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
     // Renamed from setState to avoid conflict
     public setNpcState(newState: NpcState) {
         if (this.currentState === newState) return;
-        console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] changed state: ${this.currentState} -> ${newState}`);
+
+        const oldState = this.currentState;
+        console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] changed state: ${oldState} -> ${newState}`);
         this.currentState = newState;
+
+        // Stop actions if entering Resting state
+        if (newState === 'Resting') {
+            this.stopMovement(); // Ensure velocity is zero
+            // Potentially cancel other timers (like Farmer's harvest timer) here if needed
+            // Example: if (this.harvestTimer) this.harvestTimer.remove();
+        }
+
         this.updateAppearance();
     }
 
@@ -88,11 +99,31 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
-    // Basic update loop for movement
+    // Basic update loop for movement and state checks
     preUpdate(time: number, delta: number) {
         super.preUpdate(time, delta); // Call parent update
 
-        // Update state text position
+        // --- Day/Night State Check ---
+        if (!this.currentScene.isDaytime && this.currentState !== 'Resting') {
+            // Time to rest!
+            this.setNpcState('Resting');
+        } else if (this.currentScene.isDaytime && this.currentState === 'Resting') {
+            // Time to wake up!
+            this.setNpcState('Idle');
+        }
+
+        // Don't process movement/actions if resting
+        if (this.currentState === 'Resting') {
+            // Ensure movement is stopped if somehow still moving
+            if (this.body?.velocity.x !== 0 || this.body?.velocity.y !== 0) {
+                this.stopMovement(); // Use existing method to stop velocity
+            }
+            // Update state text position even when resting
+            this.stateText.setPosition(this.x, this.y - this.displayHeight / 2 - 2);
+            return; // Skip rest of update logic
+        }
+
+        // --- Update state text position (for non-resting states) ---
         this.stateText.setPosition(this.x, this.y - this.displayHeight / 2 - 2);
 
         // Check if reached target

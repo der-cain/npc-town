@@ -22,6 +22,15 @@ export default class GameScene extends Phaser.Scene {
   private wineryGrapeText!: Phaser.GameObjects.Text;
   private wineryWineText!: Phaser.GameObjects.Text;
   private shopWineText!: Phaser.GameObjects.Text;
+  private timeText!: Phaser.GameObjects.Text; // For Day/Night display
+  private nightOverlay!: Phaser.GameObjects.Rectangle; // Darkening overlay
+
+  // Day/Night Cycle properties
+  private dayLengthSeconds: number = 120; // 2 minutes for a full cycle
+  private currentTimeOfDay: number = 0.25; // Start mid-morning (0.0 = midnight, 0.25 = morning, 0.5 = noon, 0.75 = evening)
+  public isDaytime: boolean = true; // Public so NPCs can check it
+  private nightStartThreshold: number = 0.70; // 70% through the cycle
+  private dayStartThreshold: number = 0.15; // 15% through the cycle (allows for some night)
 
   constructor() {
     // The key of the scene for Phaser's scene manager
@@ -163,16 +172,80 @@ export default class GameScene extends Phaser.Scene {
     this.wineryGrapeText = this.add.text(wineryX, wineryY + wineryHeight + 5, 'Grapes: 0', uiTextStyle);
     this.wineryWineText = this.add.text(wineryX, wineryY + wineryHeight + 20, 'Wine: 0', uiTextStyle);
     this.shopWineText = this.add.text(shopX, shopY + shopHeight + 5, 'Wine: 0', uiTextStyle);
+    // Time indicator in upper right
+    this.timeText = this.add.text(this.cameras.main.width - 10, 10, 'Time: Day', uiTextStyle).setOrigin(1, 0).setDepth(1001); // Ensure UI is above overlay
 
-    console.log('Created UI text elements.');
+    // Set depth for other UI elements
+    this.wineryGrapeText.setDepth(1001);
+    this.wineryWineText.setDepth(1001);
+    this.shopWineText.setDepth(1001);
+
+    // Create Night Overlay
+    this.nightOverlay = this.add.rectangle(
+        0, 0,
+        this.cameras.main.width, this.cameras.main.height,
+        0x000000 // Black color
+    )
+    .setOrigin(0, 0)
+    .setAlpha(0) // Start fully transparent
+    .setDepth(1000); // Ensure it's on top of game elements but below UI
+
+    console.log('Created UI text elements and night overlay.');
   }
 
   update(time: number, delta: number) {
-    // Game loop logic, runs continuously
+    // --- Time Update ---
+    const deltaSeconds = delta / 1000;
+    this.currentTimeOfDay += deltaSeconds / this.dayLengthSeconds;
+    this.currentTimeOfDay %= 1.0; // Wrap around at 1.0 (midnight)
 
-    // Update UI Text
+    // Determine if it's daytime (working hours)
+    const previouslyDaytime = this.isDaytime;
+    this.isDaytime = this.currentTimeOfDay >= this.dayStartThreshold && this.currentTimeOfDay < this.nightStartThreshold;
+
+    if (this.isDaytime && !previouslyDaytime) {
+        console.log("--- Day Started ---");
+        // Potentially trigger wake-up events here if needed
+    } else if (!this.isDaytime && previouslyDaytime) {
+        console.log("--- Night Started ---");
+        // Potentially trigger go-to-sleep events here if needed
+    }
+
+    // --- Visual Update ---
+    // Adjust night overlay alpha based on time of day
+    const maxAlpha = 0.6; // How dark it gets at peak night
+    let targetAlpha = 0;
+    // Define transition periods (e.g., dawn 0.10-0.25, dusk 0.70-0.85)
+    const dawnStart = this.dayStartThreshold; // 0.10
+    const dawnEnd = 0.25;
+    const duskStart = this.nightStartThreshold; // 0.70
+    const duskEnd = 0.85;
+
+    if (this.currentTimeOfDay < dawnStart || this.currentTimeOfDay >= duskEnd) {
+        // Full night
+        targetAlpha = maxAlpha;
+    } else if (this.currentTimeOfDay >= dawnStart && this.currentTimeOfDay < dawnEnd) {
+        // Dawn: Fade out overlay (night -> day)
+        targetAlpha = Phaser.Math.Linear(maxAlpha, 0, Phaser.Math.Percent(this.currentTimeOfDay, dawnStart, dawnEnd));
+    } else if (this.currentTimeOfDay >= duskStart && this.currentTimeOfDay < duskEnd) {
+        // Dusk: Fade in overlay (day -> night)
+        targetAlpha = Phaser.Math.Linear(0, maxAlpha, Phaser.Math.Percent(this.currentTimeOfDay, duskStart, duskEnd));
+    } else {
+        // Full day
+        targetAlpha = 0;
+    }
+    this.nightOverlay.setAlpha(targetAlpha);
+
+
+    // --- UI Update ---
     this.wineryGrapeText.setText(`Grapes: ${this.wineryLogic.grapeInventory}/${this.wineryLogic.maxGrapes}`);
     this.wineryWineText.setText(`Wine: ${this.wineryLogic.wineInventory}/${this.wineryLogic.maxWine}`);
     this.shopWineText.setText(`Wine: ${this.shopLogic.wineInventory}/${this.shopLogic.maxWine}`);
+    // Update time text to HH:MM format
+    const totalMinutes = Math.floor(this.currentTimeOfDay * 24 * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    this.timeText.setText(`Time: ${formattedTime} (${this.isDaytime ? 'Day' : 'Night'})`);
   }
 }
