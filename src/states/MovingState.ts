@@ -2,29 +2,30 @@ import Phaser from 'phaser';
 import NPC from '../entities/NPC';
 import NpcState from './NpcState';
 import GameScene from '../scenes/GameScene';
-// Import other states for transitions upon arrival
+// Import other states only if needed for direct transitions *within* MovingState (unlikely now)
 import IdleState from './IdleState';
-import RestingState from './RestingState';
-import HarvestingState from '../states/HarvestingState'; // Import HarvestingState
-// Import specific NPC types for checks and method calls
-import Farmer from '../entities/Farmer';
-import Winemaker from '../entities/Winemaker';
+// No longer need specific state/NPC imports here for arrival logic
+// import RestingState from './RestingState';
+// import HarvestingState from '../states/HarvestingState';
+// import Farmer from '../entities/Farmer';
+// import Winemaker from '../entities/Winemaker';
+
 
 /**
  * State representing the NPC moving towards a specific target position.
- * Handles checking for arrival and transitioning to the next appropriate state.
+ * Handles checking for arrival and delegating the arrival logic to the NPC.
  */
 export default class MovingState implements NpcState {
     private targetPosition: Phaser.Math.Vector2 | null = null;
     private purpose: string | null = null; // e.g., 'MovingToWork', 'MovingHome', 'MovingToHarvest', 'DeliveringGrapes', 'ReturningToWinery'
-    private nextStateData: any = null; // Optional data for the *next* state after arrival
+    private nextStateData: any = null; // Optional data for the *next* state after arrival (less used now)
 
     enter(npc: NPC, data?: any): void {
         console.log(`${npc.constructor.name} entering MovingState`);
         if (data && data.targetPosition instanceof Phaser.Math.Vector2) {
             this.targetPosition = data.targetPosition;
             this.purpose = data.purpose || 'MovingToTarget'; // Default purpose
-            this.nextStateData = data.nextStateData || null; // Carry over data for the next state
+            this.nextStateData = data.nextStateData || null; // Store any data intended for the *next* state
 
             // targetPosition is guaranteed to be non-null here due to the instanceof check
             // Use non-null assertion (!) to satisfy TypeScript
@@ -42,55 +43,15 @@ export default class MovingState implements NpcState {
         // Check for arrival
         if (npc.hasReachedTarget(this.targetPosition, 5)) { // Use a threshold
             const arrivedAt = this.targetPosition; // Store before clearing
-            const arrivalPurpose = this.purpose;
+            const arrivalPurpose = this.purpose; // Store purpose before clearing in exit
+
             console.log(`${npc.constructor.name} reached target [${arrivedAt.x.toFixed(0)}, ${arrivedAt.y.toFixed(0)}] for purpose: ${arrivalPurpose}`);
 
-            // --- Decide next state based on purpose ---
-            let nextState: NpcState | null = null; // Use null to indicate state might be handled by action method
+            // Delegate arrival logic to the NPC instance
+            // The NPC's handleArrival method is now responsible for deciding the next state
+            npc.handleArrival(arrivalPurpose, arrivedAt);
 
-            if (arrivalPurpose === 'MovingHome') {
-                nextState = new RestingState();
-            } else if (arrivalPurpose === 'MovingToWork') {
-                // Arrived at work location. Transition to Idle.
-                // The Idle state itself should handle finding specific work.
-                nextState = new IdleState();
-            } else if (arrivalPurpose === 'MovingToHarvest') {
-                // Arrived at a specific plot to harvest
-                if (npc instanceof Farmer && npc.targetPlot) {
-                    console.log("Arrived at plot, transitioning to HarvestingState.");
-                    nextState = new HarvestingState();
-                    // Pass the plot data needed by HarvestingState.enter
-                    this.nextStateData = { targetPlot: npc.targetPlot };
-                } else {
-                    console.warn("Arrived for MovingToHarvest but NPC is not Farmer or targetPlot is missing. Going Idle.");
-                    nextState = new IdleState();
-                }
-            } else if (arrivalPurpose === 'DeliveringGrapes') {
-                 // Arrived at winery to deliver grapes
-                 if (npc instanceof Farmer) {
-                    console.log("Arrived at winery to deliver grapes. Calling deliverGrapes method.");
-                    // The deliverGrapes method handles the next state transition (to Idle)
-                    (npc as any).deliverGrapes(); // Cast to any to access private method, or make deliverGrapes public/protected
-                    nextState = null; // State transition handled internally by deliverGrapes
-                 } else {
-                    console.warn("Arrived for DeliveringGrapes but NPC is not Farmer. Going Idle.");
-                    nextState = new IdleState();
-                 }
-            } else if (arrivalPurpose === 'ReturningToWinery') {
-                 // Winemaker arrived back at winery
-                 console.log("Winemaker arrived back at winery.");
-                 nextState = new IdleState(); // Go idle, check for wine later
-            } else {
-                 // Default for unknown or generic 'MovingToTarget'
-                 console.log(`Arrived for unknown/generic purpose '${arrivalPurpose}'. Going Idle.`);
-                 nextState = new IdleState();
-            }
-
-            // Transition to the determined next state ONLY if one was set
-            if (nextState) {
-                npc.changeState(nextState, this.nextStateData);
-            }
-
+            // NOTE: We no longer call npc.changeState here. It's done within npc.handleArrival or methods called by it.
         } else {
             // Continue moving - physics engine handles this based on setMovementTarget
         }

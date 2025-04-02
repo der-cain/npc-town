@@ -58,8 +58,26 @@ export default class Farmer extends NPC {
         }
     }
 
-    private deliverGrapes(): void {
-        // This method might be called by a state upon arrival at the winery
+    /**
+     * Overrides the base handleArrival to manage Farmer-specific transitions.
+     */
+    public override handleArrival(purpose: string | null, arrivedAt: Phaser.Math.Vector2): void {
+        console.log(`Farmer handleArrival for purpose: ${purpose}`);
+        if (purpose === 'MovingToHarvest') {
+            // Arrived at plot, start harvesting (which transitions to HarvestingState)
+            this.startHarvesting();
+        } else if (purpose === 'DeliveringGrapes') {
+            // Arrived at winery, deliver grapes (which transitions to IdleState)
+            this.deliverGrapes();
+        } else {
+            // For other purposes (MovingHome, MovingToWork, unknown), use base logic
+            super.handleArrival(purpose, arrivedAt);
+        }
+    }
+
+    // Made public so handleArrival can call it
+    public deliverGrapes(): void {
+        // This method might be called by handleArrival upon arrival at the winery
         if (!this.inventory || this.inventory.type !== 'Grape') {
             console.warn('Farmer trying to deliver but has no grapes.');
             this.changeState(new IdleState()); // Go idle if delivery is impossible
@@ -79,9 +97,9 @@ export default class Farmer extends NPC {
         this.changeState(new IdleState()); // Go back to idle after attempting delivery
     }
 
-    // This method might be called by a state upon arrival at a plot
-    private startHarvesting(): void {
-        // Called when arriving at a target plot
+    // Made public so handleArrival can call it
+    public startHarvesting(): void {
+        // Called by handleArrival upon arrival at a target plot
         if (!this.targetPlot || this.targetPlot.currentState !== 'Ripe') {
             console.warn('Farmer arrived at plot, but it is invalid or not ripe.');
             this.targetPlot = null;

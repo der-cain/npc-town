@@ -13,8 +13,37 @@ export default class Winemaker extends NPC {
         console.log('Winemaker created');
     }
 
-    // Note: updateIdle logic needs to move into a state (e.g., IdleState or CheckingWineryState)
-    //       This state would check wineryLogic, collect wine, and transition to MovingState.
+    /**
+     * Called by IdleState.update() - Winemaker checks if wine is ready for delivery.
+     */
+    public override checkForWork(): void {
+        // Only look for work during the day and if currently Idle
+        if (!this.currentScene.isDaytime || !(this.currentState instanceof IdleState)) {
+            return;
+        }
+
+        // Check if winery has a full batch available and we have no inventory
+        if (this.currentScene.wineryLogic.wineInventory >= this.batchSize && this.inventory === null) {
+            console.log(`Winemaker checking work: Found batch of ${this.batchSize} wine available.`);
+            // Try to collect the full batch
+            const collected = this.currentScene.wineryLogic.collectWine(this.batchSize);
+            if (collected) {
+                console.log(`Winemaker collected batch of ${this.batchSize} wine.`);
+                this.inventory = { type: 'Wine', quantity: this.batchSize };
+                // Move to the shop drop-off point
+                const shopTarget = this.currentScene.shopWineDropOffPoint;
+                this.changeState(new MovingState(), {
+                    targetPosition: new Phaser.Math.Vector2(shopTarget.x, shopTarget.y),
+                    purpose: 'DeliveringWine' // New purpose for clarity
+                });
+            } else {
+                // Should not happen if wineInventory >= batchSize, but good to handle
+                console.warn(`Winemaker tried to collect batch of ${this.batchSize}, but failed unexpectedly.`);
+                // Remain Idle
+            }
+        }
+        // Else: Remain Idle if no batch is ready or inventory is not empty
+    }
 
     // Note: stopMovement logic is now handled within MovingState.update/exit
 
@@ -46,5 +75,22 @@ export default class Winemaker extends NPC {
         });
     }
 
-    // Note: handleArrivalAtTarget logic is now handled within MovingState.update
+    /**
+     * Overrides the base handleArrival to manage Winemaker-specific transitions.
+     */
+    public override handleArrival(purpose: string | null, arrivedAt: Phaser.Math.Vector2): void {
+        console.log(`Winemaker handleArrival for purpose: ${purpose}`);
+        if (purpose === 'DeliveringWine') {
+            // Arrived at shop, deliver wine (which transitions to MovingState -> ReturningToWinery)
+            this.deliverWine();
+        } else if (purpose === 'ReturningToWinery') {
+            // Arrived back at winery, go idle
+            this.changeState(new IdleState());
+        } else {
+            // For other purposes (MovingHome, MovingToWork, unknown), use base logic
+            super.handleArrival(purpose, arrivedAt);
+        }
+    }
+
+    // Note: handleArrivalAtTarget logic is now handled within MovingState.update (and this handleArrival override)
 }

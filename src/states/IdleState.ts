@@ -1,9 +1,5 @@
-import Phaser from 'phaser'; // Import Phaser for Vector2 and Utils
 import NPC from '../entities/NPC';
 import NpcState from './NpcState';
-import Farmer from '../entities/Farmer'; // Import Farmer for instanceof check
-import GameScene from '../scenes/GameScene'; // Import GameScene for plot/winery access
-import MovingState from './MovingState'; // Import MovingState for transitions
 // import RestingState from './RestingState'; // Not needed directly here
 
 /**

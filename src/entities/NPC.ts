@@ -105,6 +105,27 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         // console.log(`${this.constructor.name} checking for work (base implementation).`);
     }
 
+    /**
+     * Handles the logic when the NPC arrives at a destination.
+     * Called by MovingState upon reaching the target.
+     * Base implementation handles common cases like arriving home or at work.
+     * Subclasses should override this to handle specific arrival purposes.
+     * @param purpose The purpose string passed to MovingState (e.g., 'MovingHome', 'MovingToHarvest').
+     * @param arrivedAt The position vector where the NPC arrived.
+     */
+    public handleArrival(purpose: string | null, arrivedAt: Phaser.Math.Vector2): void {
+        console.log(`${this.constructor.name} handleArrival for purpose: ${purpose}`);
+        if (purpose === 'MovingHome') {
+            this.changeState(new RestingState());
+        } else if (purpose === 'MovingToWork') {
+            this.changeState(new IdleState());
+        } else {
+            // Default for unknown or unhandled purposes in base class
+            console.log(`Base handleArrival defaulting to IdleState for purpose: ${purpose}`);
+            this.changeState(new IdleState());
+        }
+    }
+
     // --- Update Loop ---
 
     /**
