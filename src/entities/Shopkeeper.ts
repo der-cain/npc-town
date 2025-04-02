@@ -7,21 +7,9 @@ export default class Shopkeeper extends NPC {
         console.log('Shopkeeper created');
     }
 
-    // Override the idle update (will add logic later)
-    protected updateIdle(time: number, delta: number): void {
-        // Explicit check
-        if (this.currentState !== 'Idle') return;
+    // Note: updateIdle logic will move into a state (e.g., IdleState or TendingShopState)
 
-        // TODO: Manage shop inventory, interact with customers
-    }
+    // TODO: Add logic for buying wine from winemaker, selling to customers (likely within states)
 
-    // TODO: Add logic for buying wine from winemaker, selling to customers
-
-    // Override the base arrival handler (no specific targets yet)
-    protected handleArrivalAtTarget(target: Phaser.Math.Vector2): void {
-        // Currently, Shopkeeper only moves between home and work.
-        // Arrival at work is handled by the base NPC class setting state to Idle.
-        // If other targets were added, logic would go here.
-        super.handleArrivalAtTarget(target); // Default to going Idle
-    }
+    // Note: handleArrivalAtTarget logic is now handled within MovingState.update
 }

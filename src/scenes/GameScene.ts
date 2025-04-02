@@ -151,10 +151,7 @@ export default class GameScene extends Phaser.Scene {
     this.winemaker.workPosition = this.winemakerWorkPos;
     this.shopkeeper.homePosition = this.shopkeeperHomePos;
     this.shopkeeper.workPosition = this.shopkeeperWorkPos;
-    // Set initial state to Resting
-    this.farmer.setNpcState('Resting');
-    this.winemaker.setNpcState('Resting');
-    this.shopkeeper.setNpcState('Resting');
+    // Initial state is now set to RestingState within the NPC constructor
     console.log('Created NPCs at home, resting.');
 
     // --- Create Logic Handlers ---

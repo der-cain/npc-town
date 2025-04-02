@@ -1,59 +1,30 @@
+import Phaser from 'phaser'; // Import Phaser for Vector2
 import NPC from './NPC';
 import GameScene from '../scenes/GameScene';
+// Import necessary states
+import IdleState from '../states/IdleState';
+import MovingState from '../states/MovingState';
 
 export default class Winemaker extends NPC {
-    private readonly batchSize = 5; // How many bottles to deliver at once
+    public readonly batchSize = 5; // How many bottles to deliver at once (made public for potential state access)
 
     constructor(scene: GameScene, x: number, y: number) {
         super(scene, x, y, 'npc_winemaker'); // Use the generated blue circle texture
         console.log('Winemaker created');
     }
 
-    // Override the idle update
-    protected updateIdle(time: number, delta: number): void {
-        // Explicit check
-        if (this.currentState !== 'Idle') return;
+    // Note: updateIdle logic needs to move into a state (e.g., IdleState or CheckingWineryState)
+    //       This state would check wineryLogic, collect wine, and transition to MovingState.
 
-        // Check if winery has a full batch available and we have no inventory
-        if (this.currentScene.wineryLogic.wineInventory >= this.batchSize && this.inventory === null) {
-            console.log(`Winemaker found batch of ${this.batchSize} wine available.`);
-            // Try to collect the full batch
-            const collected = this.currentScene.wineryLogic.collectWine(this.batchSize);
-            if (collected) {
-                console.log(`Winemaker collected batch of ${this.batchSize} wine.`);
-                this.inventory = { type: 'Wine', quantity: this.batchSize };
-                // Move to the shop drop-off point
-                this.moveTo(this.currentScene.shopWineDropOffPoint); // Use correct property name
-            } else {
-                // Should not happen if wineInventory >= batchSize, but good to handle
-                console.warn(`Winemaker tried to collect batch of ${this.batchSize}, but failed unexpectedly.`);
-            }
-        }
-        // Note: Production is handled automatically by WineryLogic when grapes arrive
-    }
+    // Note: stopMovement logic is now handled within MovingState.update/exit
 
-    // Override stopMovement to handle arrival at the shop
-    protected stopMovement(): void {
-        const previousState = this.currentState;
-        super.stopMovement(); // Sets state back to Idle by default
-
-        if (previousState === 'MovingToTarget') {
-            // Check if arrived at the shop drop-off point
-            if (Phaser.Math.Distance.Between(this.x, this.y, this.currentScene.shopWineDropOffPoint.x, this.currentScene.shopWineDropOffPoint.y) < 5) { // Use correct property name
-                this.deliverWine();
-            }
-            // Check if arrived back at the winery pickup point
-            else if (Phaser.Math.Distance.Between(this.x, this.y, this.currentScene.wineryWinePickupPoint.x, this.currentScene.wineryWinePickupPoint.y) < 5) {
-                console.log('Winemaker arrived back at winery pickup point.');
-                // State is already set to Idle by super.stopMovement()
-            }
-        }
-    }
-
-    private deliverWine(): void {
+    /**
+     * Called by a state (e.g., MovingState) upon arrival at the shop drop-off point.
+     */
+    public deliverWine(): void { // Made public for states to call
         if (!this.inventory || this.inventory.type !== 'Wine') {
-            console.warn('Winemaker arrived at shop but has no wine.');
-            this.setNpcState('Idle');
+            console.warn('Winemaker trying to deliver but has no wine.');
+            this.changeState(new IdleState()); // Go idle if delivery is impossible
             return;
         }
 
@@ -67,23 +38,13 @@ export default class Winemaker extends NPC {
             console.log('Shop did not accept wine (maybe full?). Winemaker keeps wine.');
             // Winemaker might wait or try again later - for now, just go idle
         }
-        // After delivering, move back to the winery pickup point to wait
-        this.moveTo(this.currentScene.wineryWinePickupPoint);
-        // Note: setNpcState('Idle') will be called by stopMovement when it arrives there
+        // After attempting delivery, move back to the winery pickup point to wait
+        const wineryTarget = this.currentScene.wineryWinePickupPoint;
+        this.changeState(new MovingState(), {
+            targetPosition: new Phaser.Math.Vector2(wineryTarget.x, wineryTarget.y),
+            purpose: 'ReturningToWinery' // New purpose for clarity
+        });
     }
 
-    // Override the base arrival handler for specific Winemaker targets
-    protected handleArrivalAtTarget(target: Phaser.Math.Vector2): void {
-        if (target.x === this.currentScene.shopWineDropOffPoint.x && target.y === this.currentScene.shopWineDropOffPoint.y) {
-            // Arrived at the shop drop-off
-            this.deliverWine();
-        } else if (target.x === this.currentScene.wineryWinePickupPoint.x && target.y === this.currentScene.wineryWinePickupPoint.y) {
-            // Arrived back at winery pickup point, just go idle (already handled by base stopMovement setting state to Idle)
-             console.log('Winemaker arrived back at winery pickup point.');
-             // No specific action needed here, updateIdle will check for wine
-        } else {
-            // Arrived at an unknown target? Go idle.
-            super.handleArrivalAtTarget(target);
-        }
-    }
+    // Note: handleArrivalAtTarget logic is now handled within MovingState.update
 }

@@ -1,64 +1,68 @@
 import NPC from './NPC';
 import GameScene from '../scenes/GameScene';
 import VineyardPlot from './VineyardPlot';
+// Import necessary states
+import IdleState from '../states/IdleState';
+import MovingState from '../states/MovingState';
+import HarvestingState from '../states/HarvestingState'; // Assuming this will exist
 
 export default class Farmer extends NPC {
-    private targetPlot: VineyardPlot | null = null; // Track the specific plot being targeted
-    private readonly maxInventory = 20; // How many grapes the farmer can carry
+    public targetPlot: VineyardPlot | null = null; // Track the specific plot being targeted (Made public for state access)
+    protected readonly maxInventory = 20; // How many grapes the farmer can carry (Made protected)
 
     constructor(scene: GameScene, x: number, y: number) {
         super(scene, x, y, 'npc_farmer'); // Use the generated green circle texture
         console.log('Farmer created');
     }
 
-    // Override the idle update to look for work
-    protected updateIdle(time: number, delta: number): void {
-        // Explicit check, though preUpdate should handle this
-        if (this.currentState !== 'Idle') return;
+    // Note: stopMovement logic is now handled within MovingState.update/exit
 
-        // If inventory is full, go deliver
-        if (this.inventory && this.inventory.quantity >= this.maxInventory) {
-            console.log('Farmer inventory full, moving to winery.');
-            this.targetPlot = null; // Ensure we don't think we're targeting a plot
-            this.moveTo(this.currentScene.wineryGrapeDropOffPoint); // Use correct property name
-            return; // Don't look for more plots
+    /**
+     * Called by IdleState.enter() - Farmer checks for ripe plots or delivery needs.
+     */
+    public override checkForWork(): void {
+        // Only look for work during the day and if currently Idle
+        // (avoids issues if checkForWork is somehow called during another state)
+        if (!this.currentScene.isDaytime || !(this.currentState instanceof IdleState)) {
+            // console.log(`${this.constructor.name} skipping checkForWork (not daytime or not Idle)`);
+            return;
         }
 
-        // Find a ripe plot that isn't already targeted (more robust check needed for multiple farmers)
+        // 1. Check if inventory is full, need to deliver
+        if (this.inventory && this.inventory.quantity >= this.maxInventory) {
+            console.log('Farmer checking work: Inventory full, moving to winery.');
+            this.targetPlot = null; // Ensure plot target is cleared
+            const targetPoint = this.currentScene.wineryGrapeDropOffPoint;
+            this.changeState(new MovingState(), {
+                targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y),
+                purpose: 'DeliveringGrapes'
+            });
+            return; // Don't look for plots if delivering
+        }
+
+        // 2. Find a ripe plot to harvest
+        // TODO: Add logic to prevent multiple farmers targeting the same plot
         const availablePlots = this.currentScene.vineyardPlots.filter(plot => plot.currentState === 'Ripe');
 
         if (availablePlots.length > 0) {
-            // Pick a random available plot
             const ripePlot = Phaser.Utils.Array.GetRandom(availablePlots);
-            console.log(`Farmer found ripe plot at [${ripePlot.x.toFixed(0)}, ${ripePlot.y.toFixed(0)}]`);
-            this.targetPlot = ripePlot;
-            this.moveTo(ripePlot); // Move towards the plot
-            // State is set to 'MovingToTarget' within moveTo()
-        }
-        // Else: Stay idle if no ripe plots found
-    }
-
-    // Override stopMovement to handle arrival at different locations
-    protected stopMovement(): void {
-        const previousState = this.currentState;
-        super.stopMovement(); // Sets state back to Idle by default
-
-        // Logic after reaching a target depends on *what* the target was
-        if (previousState === 'MovingToTarget') {
-            if (this.targetPlot && Phaser.Math.Distance.Between(this.x, this.y, this.targetPlot.x, this.targetPlot.y) < 5) {
-                // Arrived at the vineyard plot
-                this.startHarvesting();
-            } else if (Phaser.Math.Distance.Between(this.x, this.y, this.currentScene.wineryGrapeDropOffPoint.x, this.currentScene.wineryGrapeDropOffPoint.y) < 5) { // Use correct property name
-                // Arrived at the winery drop-off
-                this.deliverGrapes();
-            }
+            console.log(`Farmer checking work: Found ripe plot at [${ripePlot.x.toFixed(0)}, ${ripePlot.y.toFixed(0)}]`);
+            this.targetPlot = ripePlot; // Set the target plot on the farmer instance
+            // Transition to MovingState to go to the plot
+            this.changeState(new MovingState(), {
+                targetPosition: new Phaser.Math.Vector2(ripePlot.x, ripePlot.y),
+                purpose: 'MovingToHarvest',
+            });
+        } else {
+            // console.log("Farmer checking work: No ripe plots found and inventory not full.");
         }
     }
 
     private deliverGrapes(): void {
+        // This method might be called by a state upon arrival at the winery
         if (!this.inventory || this.inventory.type !== 'Grape') {
-            console.warn('Farmer arrived at winery but has no grapes.');
-            this.setNpcState('Idle');
+            console.warn('Farmer trying to deliver but has no grapes.');
+            this.changeState(new IdleState()); // Go idle if delivery is impossible
             return;
         }
 
@@ -72,25 +76,33 @@ export default class Farmer extends NPC {
             console.log('Winery did not accept grapes (maybe full?). Farmer keeps grapes.');
             // Farmer might wait or try again later - for now, just go idle
         }
-        this.setNpcState('Idle'); // Go back to idle after attempting delivery
+        this.changeState(new IdleState()); // Go back to idle after attempting delivery
     }
 
+    // This method might be called by a state upon arrival at a plot
     private startHarvesting(): void {
+        // Called when arriving at a target plot
         if (!this.targetPlot || this.targetPlot.currentState !== 'Ripe') {
-            console.warn('Farmer tried to harvest but target plot is invalid or not ripe.');
+            console.warn('Farmer arrived at plot, but it is invalid or not ripe.');
             this.targetPlot = null;
-            this.setNpcState('Idle'); // Go back to idle
+            this.changeState(new IdleState()); // Go back to idle
             return;
         }
 
         console.log(`Farmer starting to harvest plot [${this.targetPlot.x.toFixed(0)}, ${this.targetPlot.y.toFixed(0)}]`);
-        this.setNpcState('Harvesting');
+        // Transition to Harvesting state, passing the target plot
+        this.changeState(new HarvestingState(), { targetPlot: this.targetPlot });
 
-        // Simulate harvesting time (faster)
+        // Simulate harvesting time (faster) - This timer logic should ideally move INTO HarvestingState.enter or update
         this.scene.time.delayedCall(500, () => { // 0.5 seconds to harvest
-            if (this.currentState === 'Harvesting' && this.targetPlot) { // Check if still harvesting this plot
-                const success = this.targetPlot.harvest();
-                if (success) {
+            // Check if we are *still* in the Harvesting state and targeting the same plot
+            if (this.currentState instanceof HarvestingState && this.targetPlot) {
+                // Explicitly assert type after instanceof check
+                const harvestingState = this.currentState as HarvestingState;
+                // Check if the state is still targeting the *correct* plot
+                if (harvestingState.isHarvestingPlot(this.targetPlot)) {
+                    const success = this.targetPlot.harvest();
+                    if (success) {
                     // Increment inventory
                     if (!this.inventory) {
                         this.inventory = { type: 'Grape', quantity: 1 };
@@ -102,40 +114,32 @@ export default class Farmer extends NPC {
                     // Decide next action
                     if (this.inventory.quantity >= this.maxInventory) {
                         console.log('Farmer inventory full after harvest, moving to winery.');
+                        const targetPoint = this.currentScene.wineryGrapeDropOffPoint;
                         this.targetPlot = null; // Clear target plot before moving
-                        this.moveTo(this.currentScene.wineryGrapeDropOffPoint); // Use correct property name
+                        this.changeState(new MovingState(), { targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y), purpose: 'DeliveringGrapes' });
                     } else {
                         // Look for another plot immediately
-                        console.log('Farmer looking for next plot.');
-                        this.targetPlot = null; // Clear current target
-                        this.setNpcState('Idle'); // Go back to idle to trigger plot search in next update
+                    console.log('Farmer looking for next plot.');
+                    this.targetPlot = null; // Clear current target
+                    this.changeState(new IdleState()); // Go back to idle to trigger plot search in next update
+                }
+                    } else {
+                        // Harvest failed (plot wasn't ripe?)
+                        console.warn('Farmer failed to harvest plot (maybe it was already harvested?).');
+                        this.targetPlot = null;
+                        this.changeState(new IdleState());
                     }
                 } else {
-                    console.warn('Farmer failed to harvest plot (maybe it was already harvested?).');
-                    this.targetPlot = null; // Clear target plot
-                    this.setNpcState('Idle'); // Go back to idle if harvest failed
+                    // State is HarvestingState, but not for the expected plot? Go idle.
+                    console.warn(`Farmer in HarvestingState but isHarvestingPlot returned false for targetPlot [${this.targetPlot.x.toFixed(0)}, ${this.targetPlot.y.toFixed(0)}]. Going Idle.`);
+                    this.targetPlot = null;
+                    this.changeState(new IdleState());
                 }
-                this.targetPlot = null; // Clear target plot
-            }
+            } // No else needed here - if not HarvestingState or no targetPlot, timer does nothing
         }, [], this);
     }
 
-    // Example state-specific update
-    protected updateHarvesting(time: number, delta: number): void {
-        // Farmer is busy harvesting, maybe play an animation later
-    }
+// Note: updateHarvesting logic will move to HarvestingState
 
-    // Override the base arrival handler for specific Farmer targets
-    protected handleArrivalAtTarget(target: Phaser.Math.Vector2): void {
-        if (this.targetPlot && target.x === this.targetPlot.x && target.y === this.targetPlot.y) {
-            // Arrived at the target vineyard plot
-            this.startHarvesting();
-        } else if (target.x === this.currentScene.wineryGrapeDropOffPoint.x && target.y === this.currentScene.wineryGrapeDropOffPoint.y) {
-            // Arrived at the winery drop-off
-            this.deliverGrapes();
-        } else {
-            // Arrived at an unknown target? Go idle.
-            super.handleArrivalAtTarget(target);
-        }
-    }
+// Note: handleArrivalAtTarget logic is now handled within MovingState.update
 }

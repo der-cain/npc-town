@@ -1,27 +1,19 @@
 import Phaser from 'phaser';
-import { Item, ItemType } from '../data/items';
+import { Item } from '../data/items'; // Removed ItemType as it wasn't used here
 import GameScene from '../scenes/GameScene'; // For type safety
-
-// Define possible NPC states (will expand later)
-export type NpcState =
-    | 'Idle'
-    | 'MovingToTarget' // Generic movement (e.g., farmer to plot, winemaker to shop)
-    | 'MovingToWork'
-    | 'MovingHome'
-    | 'Harvesting'
-    | 'Delivering'
-    | 'Producing'
-    | 'Selling'
-    | 'Resting';
+import NpcState from '../states/NpcState'; // Import the state interface
+import IdleState from '../states/IdleState'; // Import initial state
+import RestingState from '../states/RestingState'; // Import initial state option
+import MovingState from '../states/MovingState'; // Import MovingState for time-based transitions
 
 const NPC_SPEED = 80; // Pixels per second
 
 export default class NPC extends Phaser.Physics.Arcade.Sprite {
-    public currentState: NpcState = 'Idle';
+    public currentState!: NpcState; // Holds the current state object
     public inventory: Item | null = null; // What the NPC is carrying
     protected currentScene: GameScene; // Reference to the main scene
     private stateText: Phaser.GameObjects.Text; // For debugging state visually
-    private targetPosition: Phaser.Math.Vector2 | null = null; // Where the NPC is moving
+    // targetPosition is now managed within MovingState
     public homePosition: Phaser.Geom.Point | null = null; // Assigned by GameScene
     public workPosition: Phaser.Geom.Point | null = null; // Assigned by GameScene
 
@@ -31,158 +23,155 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
-        this.stateText = scene.add.text(x, y - 15, this.currentState, {
+        // Initialize stateText - content will be updated in updateAppearance
+        this.stateText = scene.add.text(x, y - 15, 'Initializing...', {
             fontSize: '10px', color: '#ffffff', backgroundColor: '#000000'
-        }).setOrigin(0.5, 1);
+        }).setOrigin(0.5, 1).setDepth(100); // Ensure text is visible
 
         this.setInteractive();
         this.setCollideWorldBounds(true);
 
-        // Initial state will be set in GameScene after creation
+        // Set initial state - NPCs start resting at home
+        // Note: We call this *after* the super constructor and basic setup
+        this.changeState(new RestingState());
     }
 
-    protected updateAppearance() {
-        this.stateText.setText(this.currentState);
-        this.stateText.setPosition(this.x, this.y - this.displayHeight / 2 - 2);
-    }
+    // --- State Management ---
 
-    public setNpcState(newState: NpcState) {
-        if (this.currentState === newState) return;
-
-        const oldState = this.currentState;
-        console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] state: ${oldState} -> ${newState}`);
-        this.currentState = newState;
-
-        // Stop actions/timers when leaving certain states or entering resting/moving home
-        if (newState === 'Resting' || newState === 'MovingHome' || newState === 'MovingToWork') {
-            if (this.body?.velocity.x !== 0 || this.body?.velocity.y !== 0) {
-                this.setVelocity(0, 0);
-            }
-            this.targetPosition = null;
-            // TODO: Cancel specific action timers if needed (e.g., Farmer harvest timer)
-            // if (oldState === 'Harvesting' && this.harvestTimer) this.harvestTimer.remove();
+    /**
+     * Changes the NPC's current state.
+     * Calls exit() on the old state and enter() on the new state.
+     * @param newState The new state object instance.
+     * @param data Optional data to pass to the new state's enter() method.
+     */
+    public changeState(newState: NpcState, data?: any): void {
+        if (this.currentState) {
+            this.currentState.exit(this); // Clean up the old state
         }
-
-        this.updateAppearance();
+        const oldStateName = this.currentState?.constructor.name || 'None';
+        this.currentState = newState;
+        console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] state: ${oldStateName} -> ${newState.constructor.name}`);
+        this.currentState.enter(this, data); // Initialize the new state
+        this.updateAppearance(); // Update debug text
     }
 
-    public moveTo(target: Phaser.Math.Vector2 | { x: number; y: number }, movingState: NpcState = 'MovingToTarget') {
-        // Note: Removed check for this.currentState === 'Resting' here,
-        // as the preUpdate logic now handles waking up and initiating movement.
+    // --- Core Actions (Called by States) ---
 
-        const targetX = target.x;
-        const targetY = target.y;
-
-        if (typeof targetX !== 'number' || typeof targetY !== 'number') {
-            console.error(`${this.constructor.name} received invalid target for moveTo:`, target);
+    /**
+     * Sets the physics body's velocity to move towards a target.
+     * Called by MovingState.enter()
+     * @param target The target position vector.
+     */
+    public setMovementTarget(target: Phaser.Math.Vector2): void {
+        if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
+            console.error(`${this.constructor.name} received invalid target for setMovementTarget:`, target);
+            this.clearMovementTarget(); // Stop if target is invalid
             return;
         }
-
-        this.setNpcState(movingState); // Set state BEFORE moving
-        this.targetPosition = new Phaser.Math.Vector2(targetX, targetY);
-        console.log(`${this.constructor.name} moving to [${targetX.toFixed(0)}, ${targetY.toFixed(0)}] in state ${movingState}`);
-        this.currentScene.physics.moveTo(this, targetX, targetY, NPC_SPEED);
+        // console.log(`${this.constructor.name} setting physics move to [${target.x.toFixed(0)}, ${target.y.toFixed(0)}]`);
+        this.currentScene.physics.moveTo(this, target.x, target.y, NPC_SPEED);
     }
 
-    // Simplified stopMovement - just stops physics
-    protected stopMovement() {
-        if (this.body?.velocity) {
-           this.setVelocity(0, 0);
+    /**
+     * Stops the NPC's movement by setting velocity to zero.
+     * Called by MovingState.exit() and potentially other states like IdleState.enter().
+     */
+    public clearMovementTarget(): void {
+        if (this.body?.velocity && (this.body.velocity.x !== 0 || this.body.velocity.y !== 0)) {
+            // console.log(`${this.constructor.name} clearing movement target (stopping velocity)`);
+            this.setVelocity(0, 0);
         }
-        this.targetPosition = null;
     }
 
+    /**
+     * Checks if the NPC has reached a target position within a given threshold.
+     * Called by MovingState.update()
+     * @param target The target position vector to check against.
+     * @param threshold The maximum distance allowed to be considered "at" the target.
+     * @returns True if the distance is within the threshold, false otherwise.
+     */
+    public hasReachedTarget(target: Phaser.Math.Vector2, threshold: number = 5): boolean {
+        if (!target) return false;
+        const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
+        return distance < threshold;
+    }
+
+    /**
+     * Method for subclasses to implement their specific logic
+     * for finding work when they become idle. Called by IdleState.enter().
+     */
+    public checkForWork(): void {
+        // Base implementation does nothing. Subclasses override.
+        // console.log(`${this.constructor.name} checking for work (base implementation).`);
+    }
+
+    // --- Update Loop ---
+
+    /**
+     * Updates the NPC's appearance (debug text) and delegates behavior to the current state.
+     */
     preUpdate(time: number, delta: number) {
         super.preUpdate(time, delta);
 
+        // --- High-Priority Time-Based State Changes ---
         const scene = this.currentScene; // Alias for readability
+        const shouldGoHome = scene.currentTimeOfDay >= scene.goHomeThreshold && scene.currentTimeOfDay < 1.0;
 
-        // --- Day/Night State Transitions ---
-        const shouldGoHome = scene.currentTimeOfDay >= scene.goHomeThreshold && scene.currentTimeOfDay < 1.0; // Check if it's time to go home (before midnight)
-        const isNightTime = !scene.isDaytime; // Check if it's actually night (for resting)
-
-        if (shouldGoHome && this.currentState !== 'Resting' && this.currentState !== 'MovingHome') {
-            // Time to head home!
-            if (this.homePosition) {
-                console.log(`${this.constructor.name} heading home for the night.`);
-                this.moveTo(this.homePosition, 'MovingHome');
-            } else {
-                this.setNpcState('Resting'); // No home? Rest in place.
+        // Check if it's time to go home and we aren't already resting or heading home
+        if (shouldGoHome && !(this.currentState instanceof RestingState)) {
+            // Avoid interrupting if already moving home
+            let isMovingHome = false;
+            if (this.currentState instanceof MovingState) {
+                // Need access to the state's purpose - requires making purpose public or adding a getter
+                // For now, let's assume MovingState has a public 'purpose' property (needs adjustment in MovingState.ts)
+                 if ((this.currentState as any).purpose === 'MovingHome') {
+                     isMovingHome = true;
+                 }
             }
-        } else if (scene.isDaytime && this.currentState === 'Resting') {
-            // Time to wake up and go to work!
-            console.log(`${this.constructor.name} waking up.`);
-            if (this.workPosition) {
-                this.moveTo(this.workPosition, 'MovingToWork');
-            } else {
-                this.setNpcState('Idle'); // No work position? Just idle.
-            }
-        }
 
-        // --- Update Logic ---
-        this.stateText.setPosition(this.x, this.y - this.displayHeight / 2 - 2);
-
-        // If Resting, do nothing else
-        if (this.currentState === 'Resting') {
-             if (this.body?.velocity.x !== 0 || this.body?.velocity.y !== 0) {
-                this.setVelocity(0, 0); // Ensure stopped
-            }
-            return;
-        }
-
-        // Check if reached target while moving
-        if ((this.currentState === 'MovingToTarget' || this.currentState === 'MovingHome' || this.currentState === 'MovingToWork') && this.targetPosition) {
-            const distance = Phaser.Math.Distance.Between(this.x, this.y, this.targetPosition.x, this.targetPosition.y);
-            if (distance < 5) {
-                const arrivedAt = this.targetPosition; // Store target info
-                const previousState = this.currentState;
-                console.log(`${this.constructor.name} reached target [${arrivedAt.x.toFixed(0)}, ${arrivedAt.y.toFixed(0)}] in state ${previousState}`);
-
-                // Stop movement *immediately* upon arrival detection
-                this.stopMovement();
-
-                // Determine next state based on arrival context
-                let nextState: NpcState = 'Idle'; // Default if no specific arrival logic matches
-                if (previousState === 'MovingHome' && this.homePosition && this.homePosition.x === arrivedAt.x && this.homePosition.y === arrivedAt.y) {
-                    console.log(`${this.constructor.name} arrived home.`);
-                    nextState = 'Resting';
-                } else if (previousState === 'MovingToWork' && this.workPosition && this.workPosition.x === arrivedAt.x && this.workPosition.y === arrivedAt.y) {
-                     console.log(`${this.constructor.name} arrived at work.`);
-                    nextState = 'Idle'; // Arrived at work, become idle
-                } else if (previousState === 'MovingToTarget') {
-                    // Handle arrival for generic moves (subclass responsibility)
-                    // Note: handleArrivalAtTarget should call setNpcState itself
-                    this.handleArrivalAtTarget(arrivedAt);
-                    return; // Skip default state setting below if handled by subclass
+            if (!isMovingHome) {
+                if (this.homePosition) {
+                    console.log(`${this.constructor.name} time to go home!`);
+                    const homeVec = new Phaser.Math.Vector2(this.homePosition.x, this.homePosition.y);
+                    this.changeState(new MovingState(), { targetPosition: homeVec, purpose: 'MovingHome' });
+                    // Skip current state's update for this frame as we just changed state
+                    this.updateAppearance(); // Update text immediately
+                    return;
+                } else {
+                    // No home? Rest in place.
+                    console.log(`${this.constructor.name} time to rest, but no home position. Resting in place.`);
+                    this.changeState(new RestingState());
+                    this.updateAppearance(); // Update text immediately
+                    return;
                 }
-                // else: If interrupted while MovingHome/MovingToWork but not at destination, default to Idle
-
-                // Set the determined state
-                this.setNpcState(nextState);
-                return; // Skip state-specific update for this frame as we just arrived
             }
         }
 
-        // Call state-specific update method if it exists (and not moving)
-        const stateUpdateMethod = `update${this.currentState}`;
-        if (typeof (this as any)[stateUpdateMethod] === 'function') {
-            ((this as any)[stateUpdateMethod] as Function)(time, delta);
+        // --- Delegate to Current State ---
+        // If no high-priority change occurred, run the current state's update
+        this.currentState?.update(this, delta);
+
+        // Update debug text position (content updated in changeState/constructor)
+        this.updateAppearance();
+    }
+
+    /** Updates the debug state text content and position */
+    protected updateAppearance() {
+        if (this.stateText && this.currentState) {
+            this.stateText.setText(this.currentState.constructor.name.replace('State', '')); // Show simplified state name
+            this.stateText.setPosition(this.x, this.y - this.displayHeight / 2 - 2);
         }
     }
 
-    // New method for subclasses to override for specific target arrivals
-    protected handleArrivalAtTarget(target: Phaser.Math.Vector2) {
-        console.log(`${this.constructor.name} arrived at generic target [${target.x.toFixed(0)}, ${target.y.toFixed(0)}], going Idle.`);
-        this.setNpcState('Idle');
-    }
 
-    // Example state-specific update (can be overridden)
-    protected updateIdle(time: number, delta: number) {
-        // Base implementation does nothing, subclasses override
-    }
+    // --- Cleanup ---
 
     destroy(fromScene?: boolean) {
-        this.stateText.destroy();
+        if (this.stateText) {
+            this.stateText.destroy();
+        }
+        // Ensure state cleanup is called if NPC is destroyed mid-state
+        this.currentState?.exit(this);
         super.destroy(fromScene);
     }
 }
