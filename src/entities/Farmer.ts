@@ -4,6 +4,7 @@ import VineyardPlot from './VineyardPlot';
 
 export default class Farmer extends NPC {
     private targetPlot: VineyardPlot | null = null; // Track the specific plot being targeted
+    private readonly maxInventory = 20; // How many grapes the farmer can carry
 
     constructor(scene: GameScene, x: number, y: number) {
         super(scene, x, y, 'npc_farmer'); // Use the generated green circle texture
@@ -12,10 +13,20 @@ export default class Farmer extends NPC {
 
     // Override the idle update to look for work
     protected updateIdle(time: number, delta: number): void {
-        // Find the first ripe plot that isn't already targeted by another farmer (if we had multiple)
-        const ripePlot = this.currentScene.vineyardPlots.find(plot => plot.currentState === 'Ripe'); // Simplified: doesn't check if targeted
+        // If inventory is full, go deliver
+        if (this.inventory && this.inventory.quantity >= this.maxInventory) {
+            console.log('Farmer inventory full, moving to winery.');
+            this.targetPlot = null; // Ensure we don't think we're targeting a plot
+            this.moveTo(this.currentScene.wineryDropOffPoint);
+            return; // Don't look for more plots
+        }
 
-        if (ripePlot) {
+        // Find a ripe plot that isn't already targeted (more robust check needed for multiple farmers)
+        const availablePlots = this.currentScene.vineyardPlots.filter(plot => plot.currentState === 'Ripe');
+
+        if (availablePlots.length > 0) {
+            // Pick a random available plot
+            const ripePlot = Phaser.Utils.Array.GetRandom(availablePlots);
             console.log(`Farmer found ripe plot at [${ripePlot.x.toFixed(0)}, ${ripePlot.y.toFixed(0)}]`);
             this.targetPlot = ripePlot;
             this.moveTo(ripePlot); // Move towards the plot
@@ -34,9 +45,31 @@ export default class Farmer extends NPC {
             if (this.targetPlot && Phaser.Math.Distance.Between(this.x, this.y, this.targetPlot.x, this.targetPlot.y) < 5) {
                 // Arrived at the vineyard plot
                 this.startHarvesting();
+            } else if (Phaser.Math.Distance.Between(this.x, this.y, this.currentScene.wineryDropOffPoint.x, this.currentScene.wineryDropOffPoint.y) < 5) {
+                // Arrived at the winery drop-off
+                this.deliverGrapes();
             }
-            // TODO: Add logic for arriving at Winery later
         }
+    }
+
+    private deliverGrapes(): void {
+        if (!this.inventory || this.inventory.type !== 'Grape') {
+            console.warn('Farmer arrived at winery but has no grapes.');
+            this.setNpcState('Idle');
+            return;
+        }
+
+        console.log(`Farmer delivering ${this.inventory.quantity} grapes to winery.`);
+        const accepted = this.currentScene.wineryLogic.addGrapes(this.inventory.quantity);
+
+        if (accepted) {
+            this.inventory = null; // Successfully delivered
+            console.log('Grapes delivered successfully.');
+        } else {
+            console.log('Winery did not accept grapes (maybe full?). Farmer keeps grapes.');
+            // Farmer might wait or try again later - for now, just go idle
+        }
+        this.setNpcState('Idle'); // Go back to idle after attempting delivery
     }
 
     private startHarvesting(): void {
@@ -55,13 +88,29 @@ export default class Farmer extends NPC {
             if (this.currentState === 'Harvesting' && this.targetPlot) { // Check if still harvesting this plot
                 const success = this.targetPlot.harvest();
                 if (success) {
-                    console.log('Farmer finished harvesting.');
-                    this.inventory = { type: 'Grape', quantity: 1 }; // Pick up 1 grape (placeholder)
-                    // TODO: Move to Winery next
-                    this.setNpcState('Idle'); // Go back to idle for now
+                    // Increment inventory
+                    if (!this.inventory) {
+                        this.inventory = { type: 'Grape', quantity: 1 };
+                    } else {
+                        this.inventory.quantity++;
+                    }
+                    console.log(`Farmer harvested. Inventory: ${this.inventory.quantity}/${this.maxInventory}`);
+
+                    // Decide next action
+                    if (this.inventory.quantity >= this.maxInventory) {
+                        console.log('Farmer inventory full after harvest, moving to winery.');
+                        this.targetPlot = null; // Clear target plot before moving
+                        this.moveTo(this.currentScene.wineryDropOffPoint);
+                    } else {
+                        // Look for another plot immediately
+                        console.log('Farmer looking for next plot.');
+                        this.targetPlot = null; // Clear current target
+                        this.setNpcState('Idle'); // Go back to idle to trigger plot search in next update
+                    }
                 } else {
                     console.warn('Farmer failed to harvest plot (maybe it was already harvested?).');
-                    this.setNpcState('Idle'); // Go back to idle
+                    this.targetPlot = null; // Clear target plot
+                    this.setNpcState('Idle'); // Go back to idle if harvest failed
                 }
                 this.targetPlot = null; // Clear target plot
             }

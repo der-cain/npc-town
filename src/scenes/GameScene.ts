@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import VineyardPlot from '../entities/VineyardPlot';
-import Farmer from '../entities/Farmer'; // Import Farmer
-import Winemaker from '../entities/Winemaker'; // Import Winemaker
-import Shopkeeper from '../entities/Shopkeeper'; // Import Shopkeeper
+import Farmer from '../entities/Farmer';
+import Winemaker from '../entities/Winemaker';
+import Shopkeeper from '../entities/Shopkeeper';
+import { WineryLogic } from '../logic/WineryLogic'; // Import WineryLogic
+import { ShopLogic } from '../logic/ShopLogic'; // Import ShopLogic
 
 export default class GameScene extends Phaser.Scene {
   // Declare scene properties
@@ -12,6 +14,8 @@ export default class GameScene extends Phaser.Scene {
   farmer!: Farmer; // Reference to the farmer instance
   winemaker!: Winemaker; // Reference to the winemaker instance
   shopkeeper!: Shopkeeper; // Reference to the shopkeeper instance
+  wineryLogic!: WineryLogic; // Handles winery inventory and production
+  shopLogic!: ShopLogic; // Handles shop inventory and customers
 
   constructor() {
     // The key of the scene for Phaser's scene manager
@@ -136,6 +140,17 @@ export default class GameScene extends Phaser.Scene {
     this.shopkeeper = new Shopkeeper(this, shopX + shopWidth / 2, shopY + shopHeight + 30);
 
     console.log('Created NPCs.');
+
+    // Create Logic Handlers
+    this.wineryLogic = new WineryLogic(this);
+    this.shopLogic = new ShopLogic(this);
+
+    // Add shutdown listeners
+    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+        console.log('GameScene shutting down...');
+        this.wineryLogic.shutdown();
+        this.shopLogic.shutdown();
+    });
   }
 
   update(time: number, delta: number) {
