@@ -1,11 +1,17 @@
 import Phaser from 'phaser';
-import VineyardPlot from '../entities/VineyardPlot'; // Import the plot class
+import VineyardPlot from '../entities/VineyardPlot';
+import Farmer from '../entities/Farmer'; // Import Farmer
+import Winemaker from '../entities/Winemaker'; // Import Winemaker
+import Shopkeeper from '../entities/Shopkeeper'; // Import Shopkeeper
 
 export default class GameScene extends Phaser.Scene {
   // Declare scene properties
   wineryDropOffPoint!: Phaser.Geom.Point;
   shopDropOffPoint!: Phaser.Geom.Point;
-  vineyardPlots: VineyardPlot[] = []; // Array to hold plot instances
+  vineyardPlots: VineyardPlot[] = [];
+  farmer!: Farmer; // Reference to the farmer instance
+  winemaker!: Winemaker; // Reference to the winemaker instance
+  shopkeeper!: Shopkeeper; // Reference to the shopkeeper instance
 
   constructor() {
     // The key of the scene for Phaser's scene manager
@@ -15,7 +21,33 @@ export default class GameScene extends Phaser.Scene {
   preload() {
     // Load assets like images, spritesheets, audio
     console.log('GameScene preload');
-    // Example: this.load.image('sky', 'assets/sky.png');
+
+    // Generate placeholder NPC textures (colored circles)
+    const npcRadius = 8;
+    const npcDiameter = npcRadius * 2;
+
+    // Farmer (Green)
+    let farmerGraphics = this.make.graphics({ x: 0, y: 0 }, false);
+    farmerGraphics.fillStyle(0x00ff00); // Green
+    farmerGraphics.fillCircle(npcRadius, npcRadius, npcRadius);
+    farmerGraphics.generateTexture('npc_farmer', npcDiameter, npcDiameter);
+    farmerGraphics.destroy();
+
+    // Winemaker (Blue)
+    let winemakerGraphics = this.make.graphics({ x: 0, y: 0 }, false);
+    winemakerGraphics.fillStyle(0x0000ff); // Blue
+    winemakerGraphics.fillCircle(npcRadius, npcRadius, npcRadius);
+    winemakerGraphics.generateTexture('npc_winemaker', npcDiameter, npcDiameter);
+    winemakerGraphics.destroy();
+
+    // Shopkeeper (Yellow)
+    let shopkeeperGraphics = this.make.graphics({ x: 0, y: 0 }, false);
+    shopkeeperGraphics.fillStyle(0xffff00); // Yellow
+    shopkeeperGraphics.fillCircle(npcRadius, npcRadius, npcRadius);
+    shopkeeperGraphics.generateTexture('npc_shopkeeper', npcDiameter, npcDiameter);
+    shopkeeperGraphics.destroy();
+
+    console.log('Generated placeholder NPC textures.');
   }
 
   create() {
@@ -97,6 +129,13 @@ export default class GameScene extends Phaser.Scene {
     }
     console.log(`Created ${this.vineyardPlots.length} vineyard plots.`);
 
+    // Create NPCs
+    // Place them near their respective areas initially
+    this.farmer = new Farmer(this, vineyardX + vineyardWidth + 30, vineyardY + 50);
+    this.winemaker = new Winemaker(this, wineryX + wineryWidth / 2, wineryY + wineryHeight + 30);
+    this.shopkeeper = new Shopkeeper(this, shopX + shopWidth / 2, shopY + shopHeight + 30);
+
+    console.log('Created NPCs.');
   }
 
   update(time: number, delta: number) {
