@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
+import VineyardPlot from '../entities/VineyardPlot'; // Import the plot class
 
 export default class GameScene extends Phaser.Scene {
+  // Declare scene properties
+  wineryDropOffPoint!: Phaser.Geom.Point;
+  shopDropOffPoint!: Phaser.Geom.Point;
+  vineyardPlots: VineyardPlot[] = []; // Array to hold plot instances
+
   constructor() {
     // The key of the scene for Phaser's scene manager
     super('GameScene');
@@ -74,12 +80,24 @@ export default class GameScene extends Phaser.Scene {
     this.shopDropOffPoint = new Phaser.Geom.Point(shopX + shopWidth / 2, shopY - 10);
 
     console.log('Placeholder world layout created.');
+
+    // Create Vineyard Plots
+    const plotSize = 32;
+    const plotPadding = 10;
+    const plotsPerRow = Math.floor(vineyardWidth / (plotSize + plotPadding));
+    const plotsPerCol = Math.floor(vineyardHeight / (plotSize + plotPadding));
+
+    for (let row = 0; row < plotsPerCol; row++) {
+      for (let col = 0; col < plotsPerRow; col++) {
+        const plotX = vineyardX + plotPadding + col * (plotSize + plotPadding) + plotSize / 2;
+        const plotY = vineyardY + plotPadding + row * (plotSize + plotPadding) + plotSize / 2;
+        const plot = new VineyardPlot(this, plotX, plotY, plotSize, plotSize);
+        this.vineyardPlots.push(plot);
+      }
+    }
+    console.log(`Created ${this.vineyardPlots.length} vineyard plots.`);
+
   }
-
-  // Declare scene properties if needed (like interaction points)
-  wineryDropOffPoint!: Phaser.Geom.Point;
-  shopDropOffPoint!: Phaser.Geom.Point;
-
 
   update(time: number, delta: number) {
     // Game loop logic, runs continuously
