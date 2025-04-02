@@ -17,7 +17,7 @@ export default class Farmer extends NPC {
         if (this.inventory && this.inventory.quantity >= this.maxInventory) {
             console.log('Farmer inventory full, moving to winery.');
             this.targetPlot = null; // Ensure we don't think we're targeting a plot
-            this.moveTo(this.currentScene.wineryDropOffPoint);
+            this.moveTo(this.currentScene.wineryGrapeDropOffPoint); // Use correct property name
             return; // Don't look for more plots
         }
 
@@ -45,7 +45,7 @@ export default class Farmer extends NPC {
             if (this.targetPlot && Phaser.Math.Distance.Between(this.x, this.y, this.targetPlot.x, this.targetPlot.y) < 5) {
                 // Arrived at the vineyard plot
                 this.startHarvesting();
-            } else if (Phaser.Math.Distance.Between(this.x, this.y, this.currentScene.wineryDropOffPoint.x, this.currentScene.wineryDropOffPoint.y) < 5) {
+            } else if (Phaser.Math.Distance.Between(this.x, this.y, this.currentScene.wineryGrapeDropOffPoint.x, this.currentScene.wineryGrapeDropOffPoint.y) < 5) { // Use correct property name
                 // Arrived at the winery drop-off
                 this.deliverGrapes();
             }
@@ -100,7 +100,7 @@ export default class Farmer extends NPC {
                     if (this.inventory.quantity >= this.maxInventory) {
                         console.log('Farmer inventory full after harvest, moving to winery.');
                         this.targetPlot = null; // Clear target plot before moving
-                        this.moveTo(this.currentScene.wineryDropOffPoint);
+                        this.moveTo(this.currentScene.wineryGrapeDropOffPoint); // Use correct property name
                     } else {
                         // Look for another plot immediately
                         console.log('Farmer looking for next plot.');

@@ -8,14 +8,20 @@ import { ShopLogic } from '../logic/ShopLogic'; // Import ShopLogic
 
 export default class GameScene extends Phaser.Scene {
   // Declare scene properties
-  wineryDropOffPoint!: Phaser.Geom.Point;
-  shopDropOffPoint!: Phaser.Geom.Point;
+  wineryGrapeDropOffPoint!: Phaser.Geom.Point; // Where farmer drops grapes
+  wineryWinePickupPoint!: Phaser.Geom.Point; // Where winemaker picks up wine
+  shopWineDropOffPoint!: Phaser.Geom.Point; // Where winemaker drops wine
   vineyardPlots: VineyardPlot[] = [];
   farmer!: Farmer; // Reference to the farmer instance
   winemaker!: Winemaker; // Reference to the winemaker instance
   shopkeeper!: Shopkeeper; // Reference to the shopkeeper instance
   wineryLogic!: WineryLogic; // Handles winery inventory and production
   shopLogic!: ShopLogic; // Handles shop inventory and customers
+
+  // UI Text Elements
+  private wineryGrapeText!: Phaser.GameObjects.Text;
+  private wineryWineText!: Phaser.GameObjects.Text;
+  private shopWineText!: Phaser.GameObjects.Text;
 
   constructor() {
     // The key of the scene for Phaser's scene manager
@@ -109,11 +115,10 @@ export default class GameScene extends Phaser.Scene {
     this.add.text(wineryX + 5, wineryY + 5, 'Winery', { fontSize: '14px', color: '#ffffff' });
     this.add.text(shopX + 5, shopY + 5, 'Shop', { fontSize: '14px', color: '#ffffff' });
 
-    // Define interaction points (can be refined later)
-    // Example: A point within the winery for drop-off
-    this.wineryDropOffPoint = new Phaser.Geom.Point(wineryX + wineryWidth / 2, wineryY + wineryHeight + 10);
-    // Example: A point within the shop for drop-off
-    this.shopDropOffPoint = new Phaser.Geom.Point(shopX + shopWidth / 2, shopY - 10);
+    // Define interaction points
+    this.wineryGrapeDropOffPoint = new Phaser.Geom.Point(wineryX + wineryWidth / 2, wineryY + wineryHeight + 10); // Below winery
+    this.wineryWinePickupPoint = new Phaser.Geom.Point(wineryX - 10, wineryY + wineryHeight / 2); // Left of winery
+    this.shopWineDropOffPoint = new Phaser.Geom.Point(shopX + shopWidth / 2, shopY - 10); // Above shop
 
     console.log('Placeholder world layout created.');
 
@@ -151,11 +156,23 @@ export default class GameScene extends Phaser.Scene {
         this.wineryLogic.shutdown();
         this.shopLogic.shutdown();
     });
+
+    // Create UI Text Elements
+    const uiTextStyle = { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000', padding: { x: 2, y: 2 } };
+    // Position texts near the relevant buildings
+    this.wineryGrapeText = this.add.text(wineryX, wineryY + wineryHeight + 5, 'Grapes: 0', uiTextStyle);
+    this.wineryWineText = this.add.text(wineryX, wineryY + wineryHeight + 20, 'Wine: 0', uiTextStyle);
+    this.shopWineText = this.add.text(shopX, shopY + shopHeight + 5, 'Wine: 0', uiTextStyle);
+
+    console.log('Created UI text elements.');
   }
 
   update(time: number, delta: number) {
     // Game loop logic, runs continuously
-    // console.log('GameScene update', time, delta);
-    // Example: player.update(cursors);
+
+    // Update UI Text
+    this.wineryGrapeText.setText(`Grapes: ${this.wineryLogic.grapeInventory}/${this.wineryLogic.maxGrapes}`);
+    this.wineryWineText.setText(`Wine: ${this.wineryLogic.wineInventory}/${this.wineryLogic.maxWine}`);
+    this.shopWineText.setText(`Wine: ${this.shopLogic.wineInventory}/${this.shopLogic.maxWine}`);
   }
 }

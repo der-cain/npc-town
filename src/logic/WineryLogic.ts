@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Item, ItemType } from '../data/items';
 
 const PRODUCTION_TIME = 5000; // 5 seconds to produce wine
+const GRAPES_PER_WINE = 5; // How many grapes needed for 1 wine
 
 /**
  * Manages the state and inventory of the Winery.
@@ -42,23 +43,13 @@ export class WineryLogic {
         return this.grapeInventory > 0;
     }
 
-    // Method for Winemaker to take grapes (starts production implicitly)
-    public takeGrapes(amount: number): boolean {
-        if (this.grapeInventory >= amount && !this.isProducing) {
-            this.grapeInventory -= amount;
-            console.log(`Winemaker took ${amount} grapes. Remaining grapes: ${this.grapeInventory}`);
-            this.startProductionProcess();
-            return true;
-        }
-        console.log(`Winemaker failed to take ${amount} grapes (Available: ${this.grapeInventory}, Producing: ${this.isProducing})`);
-        return false;
-    }
-
     // Method for Winemaker to collect finished wine
     public collectWine(amount: number): boolean {
         if (this.wineInventory >= amount) {
             this.wineInventory -= amount;
             console.log(`Winemaker collected ${amount} wine. Remaining wine: ${this.wineInventory}`);
+            // Check if we can start producing again immediately after collection
+            this.tryStartProduction();
             return true;
         }
         console.log(`Winemaker failed to collect ${amount} wine (Available: ${this.wineInventory})`);
@@ -67,20 +58,28 @@ export class WineryLogic {
 
     // Internal method to attempt starting production
     private tryStartProduction(): void {
-        if (this.hasGrapes() && !this.isProducing && this.wineInventory < this.maxWine) {
-            // For simplicity, let's assume Winemaker takes 1 grape to start
-            if (this.takeGrapes(1)) {
-                // Production started successfully via takeGrapes -> startProductionProcess
-            }
+        console.log(`Winery trying production check: Grapes=${this.grapeInventory}, Producing=${this.isProducing}, Wine=${this.wineInventory}/${this.maxWine}`); // Added log
+        // Check if we have enough grapes, aren't already producing, and have space for wine
+        if (this.grapeInventory >= GRAPES_PER_WINE && !this.isProducing && this.wineInventory < this.maxWine) {
+            console.log('Winery starting production process...');
+            this.startProductionProcess(); // Directly start the process
+        } else {
+            // Log exactly why it didn't start
+            if (this.grapeInventory < GRAPES_PER_WINE) console.log('Winery check failed: Not enough grapes.');
+            if (this.isProducing) console.log('Winery check failed: Already producing.');
+            if (this.wineInventory >= this.maxWine) console.log('Winery check failed: Wine storage full.');
         }
     }
 
     // Internal method handling the production timer
     private startProductionProcess(): void {
-        if (this.isProducing) return; // Already producing
+        // Double check conditions just before starting
+        if (this.isProducing || this.grapeInventory < GRAPES_PER_WINE) return;
 
+        // Consume GRAPES_PER_WINE grapes to start production
+        this.grapeInventory -= GRAPES_PER_WINE;
         this.isProducing = true;
-        console.log('Winery started producing wine...');
+        console.log(`Winery started producing 1 wine (used ${GRAPES_PER_WINE} grapes)...`);
 
         this.productionTimer = this.scene.time.delayedCall(PRODUCTION_TIME, () => {
             this.isProducing = false;
