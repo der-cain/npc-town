@@ -17,19 +17,24 @@ import IdleState from './IdleState';
  */
 export default class MovingState implements NpcState {
     private targetPosition: Phaser.Math.Vector2 | null = null;
-    private purpose: string | null = null; // e.g., 'MovingToWork', 'MovingHome', 'MovingToHarvest', 'DeliveringGrapes', 'ReturningToWinery'
+    private _purpose: string | null = null; // Renamed for getter e.g., 'MovingToWork', 'MovingHome', 'MovingToHarvest', 'DeliveringGrapes', 'ReturningToWinery'
     private nextStateData: any = null; // Optional data for the *next* state after arrival (less used now)
+
+    // Public getter for purpose
+    public get purpose(): string | null {
+        return this._purpose;
+    }
 
     enter(npc: NPC, data?: any): void {
         console.log(`${npc.constructor.name} entering MovingState`);
         if (data && data.targetPosition instanceof Phaser.Math.Vector2) {
             this.targetPosition = data.targetPosition;
-            this.purpose = data.purpose || 'MovingToTarget'; // Default purpose
+            this._purpose = data.purpose || 'MovingToTarget'; // Default purpose
             this.nextStateData = data.nextStateData || null; // Store any data intended for the *next* state
 
             // targetPosition is guaranteed to be non-null here due to the instanceof check
             // Use non-null assertion (!) to satisfy TypeScript
-            console.log(`${npc.constructor.name} moving to [${this.targetPosition!.x.toFixed(0)}, ${this.targetPosition!.y.toFixed(0)}] for purpose: ${this.purpose}`);
+            console.log(`${npc.constructor.name} moving to [${this.targetPosition!.x.toFixed(0)}, ${this.targetPosition!.y.toFixed(0)}] for purpose: ${this._purpose}`);
             npc.setMovementTarget(this.targetPosition!); // Tell NPC physics to move
         } else {
             console.warn(`${npc.constructor.name} entered MovingState without a valid targetPosition! Transitioning to Idle.`);
@@ -43,7 +48,7 @@ export default class MovingState implements NpcState {
         // Check for arrival
         if (npc.hasReachedTarget(this.targetPosition, 5)) { // Use a threshold
             const arrivedAt = this.targetPosition; // Store before clearing
-            const arrivalPurpose = this.purpose; // Store purpose before clearing in exit
+            const arrivalPurpose = this._purpose; // Store purpose before clearing in exit
 
             console.log(`${npc.constructor.name} reached target [${arrivedAt.x.toFixed(0)}, ${arrivedAt.y.toFixed(0)}] for purpose: ${arrivalPurpose}`);
 
@@ -62,7 +67,7 @@ export default class MovingState implements NpcState {
         // IMPORTANT: Clear the movement target in the NPC itself when exiting this state
         npc.clearMovementTarget();
         this.targetPosition = null; // Clear local reference
-        this.purpose = null;
+        this._purpose = null;
         this.nextStateData = null;
     }
 }

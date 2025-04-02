@@ -1,6 +1,8 @@
 import NPC from './NPC';
 import GameScene from '../scenes/GameScene';
 import VineyardPlot from './VineyardPlot';
+import { TimeService } from '../services/TimeService';
+import { LocationKeys } from '../services/LocationService'; // Import LocationKeys
 // Import necessary states
 import IdleState from '../states/IdleState';
 import MovingState from '../states/MovingState';
@@ -10,8 +12,9 @@ export default class Farmer extends NPC {
     public targetPlot: VineyardPlot | null = null; // Track the specific plot being targeted (Made public for state access)
     protected readonly maxInventory = 20; // How many grapes the farmer can carry (Made protected)
 
-    constructor(scene: GameScene, x: number, y: number) {
-        super(scene, x, y, 'npc_farmer'); // Use the generated green circle texture
+    // Constructor now requires TimeService
+    constructor(scene: GameScene, x: number, y: number, timeService: TimeService) {
+        super(scene, x, y, timeService, 'npc_farmer'); // Pass timeService to base constructor
         console.log('Farmer created');
     }
 
@@ -22,8 +25,8 @@ export default class Farmer extends NPC {
      */
     public override checkForWork(): void {
         // Only look for work during the day and if currently Idle
-        // (avoids issues if checkForWork is somehow called during another state)
-        if (!this.currentScene.isDaytime || !(this.currentState instanceof IdleState)) {
+        // Use timeService for daytime check
+        if (!this.timeService.isDaytime || !(this.currentState instanceof IdleState)) {
             // console.log(`${this.constructor.name} skipping checkForWork (not daytime or not Idle)`);
             return;
         }
@@ -32,7 +35,8 @@ export default class Farmer extends NPC {
         if (this.inventory && this.inventory.quantity >= this.maxInventory) {
             console.log('Farmer checking work: Inventory full, moving to winery.');
             this.targetPlot = null; // Ensure plot target is cleared
-            const targetPoint = this.currentScene.wineryGrapeDropOffPoint;
+            // Use LocationService to get the point
+            const targetPoint = this.currentScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff);
             this.changeState(new MovingState(), {
                 targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y),
                 purpose: 'DeliveringGrapes'
@@ -132,7 +136,8 @@ export default class Farmer extends NPC {
                     // Decide next action
                     if (this.inventory.quantity >= this.maxInventory) {
                         console.log('Farmer inventory full after harvest, moving to winery.');
-                        const targetPoint = this.currentScene.wineryGrapeDropOffPoint;
+                        // Use LocationService to get the point
+                        const targetPoint = this.currentScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff);
                         this.targetPlot = null; // Clear target plot before moving
                         this.changeState(new MovingState(), { targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y), purpose: 'DeliveringGrapes' });
                     } else {

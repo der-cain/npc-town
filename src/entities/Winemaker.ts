@@ -1,6 +1,8 @@
 import Phaser from 'phaser'; // Import Phaser for Vector2
 import NPC from './NPC';
 import GameScene from '../scenes/GameScene';
+import { TimeService } from '../services/TimeService';
+import { LocationKeys } from '../services/LocationService'; // Import LocationKeys
 // Import necessary states
 import IdleState from '../states/IdleState';
 import MovingState from '../states/MovingState';
@@ -8,8 +10,9 @@ import MovingState from '../states/MovingState';
 export default class Winemaker extends NPC {
     public readonly batchSize = 5; // How many bottles to deliver at once (made public for potential state access)
 
-    constructor(scene: GameScene, x: number, y: number) {
-        super(scene, x, y, 'npc_winemaker'); // Use the generated blue circle texture
+    // Constructor now requires TimeService
+    constructor(scene: GameScene, x: number, y: number, timeService: TimeService) {
+        super(scene, x, y, timeService, 'npc_winemaker'); // Pass timeService to base constructor
         console.log('Winemaker created');
     }
 
@@ -18,7 +21,8 @@ export default class Winemaker extends NPC {
      */
     public override checkForWork(): void {
         // Only look for work during the day and if currently Idle
-        if (!this.currentScene.isDaytime || !(this.currentState instanceof IdleState)) {
+        // Use timeService for daytime check
+        if (!this.timeService.isDaytime || !(this.currentState instanceof IdleState)) {
             return;
         }
 
@@ -30,8 +34,8 @@ export default class Winemaker extends NPC {
             if (collected) {
                 console.log(`Winemaker collected batch of ${this.batchSize} wine.`);
                 this.inventory = { type: 'Wine', quantity: this.batchSize };
-                // Move to the shop drop-off point
-                const shopTarget = this.currentScene.shopWineDropOffPoint;
+                // Move to the shop drop-off point using LocationService
+                const shopTarget = this.currentScene.locationService.getPoint(LocationKeys.ShopWineDropOff);
                 this.changeState(new MovingState(), {
                     targetPosition: new Phaser.Math.Vector2(shopTarget.x, shopTarget.y),
                     purpose: 'DeliveringWine' // New purpose for clarity
@@ -67,8 +71,8 @@ export default class Winemaker extends NPC {
             console.log('Shop did not accept wine (maybe full?). Winemaker keeps wine.');
             // Winemaker might wait or try again later - for now, just go idle
         }
-        // After attempting delivery, move back to the winery pickup point to wait
-        const wineryTarget = this.currentScene.wineryWinePickupPoint;
+        // After attempting delivery, move back to the winery pickup point to wait using LocationService
+        const wineryTarget = this.currentScene.locationService.getPoint(LocationKeys.WinemakerWorkPos); // WinemakerWorkPos is same as WineryWinePickup
         this.changeState(new MovingState(), {
             targetPosition: new Phaser.Math.Vector2(wineryTarget.x, wineryTarget.y),
             purpose: 'ReturningToWinery' // New purpose for clarity

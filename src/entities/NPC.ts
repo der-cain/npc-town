@@ -1,29 +1,32 @@
 import Phaser from 'phaser';
-import { Item } from '../data/items'; // Removed ItemType as it wasn't used here
-import GameScene from '../scenes/GameScene'; // For type safety
-import NpcState from '../states/NpcState'; // Import the state interface
-import IdleState from '../states/IdleState'; // Import initial state
-import RestingState from '../states/RestingState'; // Import initial state option
-import MovingState from '../states/MovingState'; // Import MovingState for time-based transitions
+import { Item } from '../data/items';
+import GameScene from '../scenes/GameScene'; // Still needed for adding to scene, physics, text
+import NpcState from '../states/NpcState';
+import IdleState from '../states/IdleState';
+import RestingState from '../states/RestingState';
+import MovingState from '../states/MovingState';
+import { TimeService, TimeEvents } from '../services/TimeService'; // Import TimeService
 
 const NPC_SPEED = 80; // Pixels per second
 
 export default class NPC extends Phaser.Physics.Arcade.Sprite {
-    public currentState!: NpcState; // Holds the current state object
-    public inventory: Item | null = null; // What the NPC is carrying
-    protected currentScene: GameScene; // Reference to the main scene
-    private stateText: Phaser.GameObjects.Text; // For debugging state visually
-    // targetPosition is now managed within MovingState
-    public homePosition: Phaser.Geom.Point | null = null; // Assigned by GameScene
-    public workPosition: Phaser.Geom.Point | null = null; // Assigned by GameScene
+    public currentState!: NpcState;
+    public inventory: Item | null = null;
+    protected currentScene: GameScene; // Keep for scene interactions
+    public timeService: TimeService; // Made public for states to access
+    private stateText: Phaser.GameObjects.Text;
+    public homePosition: Phaser.Geom.Point | null = null;
+    public workPosition: Phaser.Geom.Point | null = null;
 
-    constructor(scene: GameScene, x: number, y: number, texture: string | Phaser.Textures.Texture = 'npc_placeholder', frame?: string | number) {
+    // Modified constructor to accept TimeService
+    constructor(scene: GameScene, x: number, y: number, timeService: TimeService, texture: string | Phaser.Textures.Texture = 'npc_placeholder', frame?: string | number) {
         super(scene, x, y, texture, frame);
         this.currentScene = scene;
+        this.timeService = timeService; // Store TimeService reference
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
-        // Initialize stateText - content will be updated in updateAppearance
+        // Initialize stateText
         this.stateText = scene.add.text(x, y - 15, 'Initializing...', {
             fontSize: '10px', color: '#ffffff', backgroundColor: '#000000'
         }).setOrigin(0.5, 1).setDepth(100); // Ensure text is visible
@@ -31,9 +34,11 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         this.setInteractive();
         this.setCollideWorldBounds(true);
 
-        // Set initial state - NPCs start resting at home
-        // Note: We call this *after* the super constructor and basic setup
+        // Set initial state
         this.changeState(new RestingState());
+
+        // Listen for the GoHomeTime event
+        this.timeService.on(TimeEvents.GoHomeTime, this.handleGoHomeTime, this);
     }
 
     // --- State Management ---
@@ -131,48 +136,44 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
     /**
      * Updates the NPC's appearance (debug text) and delegates behavior to the current state.
      */
+    // --- Event Handlers ---
+
+    /** Handles the GoHomeTime event from TimeService */
+    private handleGoHomeTime(): void {
+        // Check if we are already resting or moving home
+        if (this.currentState instanceof RestingState) {
+            return; // Already resting
+        }
+        if (this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome') {
+            return; // Already moving home
+        }
+
+        // If we have a home position, go there
+        if (this.homePosition) {
+            console.log(`${this.constructor.name} received GoHomeTime event! Heading home.`);
+            const homeVec = new Phaser.Math.Vector2(this.homePosition.x, this.homePosition.y);
+            // Force state change immediately
+            this.changeState(new MovingState(), { targetPosition: homeVec, purpose: 'MovingHome' });
+        } else {
+            // No home? Rest in place.
+            console.log(`${this.constructor.name} received GoHomeTime event, but no home position. Resting in place.`);
+            this.changeState(new RestingState());
+        }
+    }
+
+    // --- Update Loop ---
+
+    /**
+     * Delegates behavior to the current state and updates appearance.
+     * Time-based logic is now handled by the TimeService event listener.
+     */
     preUpdate(time: number, delta: number) {
         super.preUpdate(time, delta);
 
-        // --- High-Priority Time-Based State Changes ---
-        const scene = this.currentScene; // Alias for readability
-        const shouldGoHome = scene.currentTimeOfDay >= scene.goHomeThreshold && scene.currentTimeOfDay < 1.0;
-
-        // Check if it's time to go home and we aren't already resting or heading home
-        if (shouldGoHome && !(this.currentState instanceof RestingState)) {
-            // Avoid interrupting if already moving home
-            let isMovingHome = false;
-            if (this.currentState instanceof MovingState) {
-                // Need access to the state's purpose - requires making purpose public or adding a getter
-                // For now, let's assume MovingState has a public 'purpose' property (needs adjustment in MovingState.ts)
-                 if ((this.currentState as any).purpose === 'MovingHome') {
-                     isMovingHome = true;
-                 }
-            }
-
-            if (!isMovingHome) {
-                if (this.homePosition) {
-                    console.log(`${this.constructor.name} time to go home!`);
-                    const homeVec = new Phaser.Math.Vector2(this.homePosition.x, this.homePosition.y);
-                    this.changeState(new MovingState(), { targetPosition: homeVec, purpose: 'MovingHome' });
-                    // Skip current state's update for this frame as we just changed state
-                    this.updateAppearance(); // Update text immediately
-                    return;
-                } else {
-                    // No home? Rest in place.
-                    console.log(`${this.constructor.name} time to rest, but no home position. Resting in place.`);
-                    this.changeState(new RestingState());
-                    this.updateAppearance(); // Update text immediately
-                    return;
-                }
-            }
-        }
-
         // --- Delegate to Current State ---
-        // If no high-priority change occurred, run the current state's update
         this.currentState?.update(this, delta);
 
-        // Update debug text position (content updated in changeState/constructor)
+        // Update debug text position
         this.updateAppearance();
     }
 
@@ -191,8 +192,10 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         if (this.stateText) {
             this.stateText.destroy();
         }
-        // Ensure state cleanup is called if NPC is destroyed mid-state
+        // Ensure state cleanup is called
         this.currentState?.exit(this);
+        // Remove event listener
+        this.timeService.off(TimeEvents.GoHomeTime, this.handleGoHomeTime, this);
         super.destroy(fromScene);
     }
 }

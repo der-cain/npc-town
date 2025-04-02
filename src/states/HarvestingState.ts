@@ -4,6 +4,7 @@ import NpcState from './NpcState';
 import VineyardPlot from '../entities/VineyardPlot';
 import Farmer from '../entities/Farmer'; // Import Farmer for type casting if needed
 import GameScene from '../scenes/GameScene';
+import { LocationKeys } from '../services/LocationService'; // Import LocationKeys
 // Import states for transitions
 import IdleState from './IdleState';
 import MovingState from './MovingState';
@@ -84,9 +85,10 @@ export default class HarvestingState implements NpcState {
             console.log(`Farmer harvested. Inventory: ${npc.inventory.quantity}/${(npc as any).maxInventory}`); // Access maxInventory (consider making it protected or adding getter)
 
             // Decide next action
-            if (npc.inventory.quantity >= (npc as any).maxInventory) {
+            if (npc.inventory.quantity >= (npc as any).maxInventory) { // TODO: Fix maxInventory access
                 console.log('Farmer inventory full after harvest, moving to winery.');
-                const targetPoint = (npc.scene as GameScene).wineryGrapeDropOffPoint;
+                // Use LocationService via scene
+                const targetPoint = (npc.scene as GameScene).locationService.getPoint(LocationKeys.WineryGrapeDropOff);
                 // No need to clear targetPlot here, exit() handles it.
                 npc.changeState(new MovingState(), { targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y), purpose: 'DeliveringGrapes' });
             } else {

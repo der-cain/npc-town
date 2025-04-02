@@ -1,9 +1,11 @@
 import NPC from './NPC';
 import GameScene from '../scenes/GameScene';
+import { TimeService } from '../services/TimeService'; // Import TimeService
 
 export default class Shopkeeper extends NPC {
-    constructor(scene: GameScene, x: number, y: number) {
-        super(scene, x, y, 'npc_shopkeeper'); // Use the generated yellow circle texture
+    // Constructor now requires TimeService
+    constructor(scene: GameScene, x: number, y: number, timeService: TimeService) {
+        super(scene, x, y, timeService, 'npc_shopkeeper'); // Pass timeService to base constructor
         console.log('Shopkeeper created');
     }
 
