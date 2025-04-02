@@ -5,7 +5,8 @@ import GameScene from '../scenes/GameScene'; // Import GameScene for type safety
 export type PlotState = 'Empty' | 'Growing' | 'Ripe';
 
 // Define timings (in milliseconds)
-const GROW_TIME = 10000; // 10 seconds to grow
+const BASE_GROW_TIME = 20000; // Base time: 20 seconds to grow (slower)
+const GROW_TIME_VARIATION = 0.2; // +/- 20% variation
 const REGROW_DELAY = 2000; // 2 seconds after harvest before regrowth starts
 
 export default class VineyardPlot extends Phaser.GameObjects.Rectangle {
@@ -64,8 +65,13 @@ export default class VineyardPlot extends Phaser.GameObjects.Rectangle {
         if (this.currentState !== 'Empty') return; // Only grow from empty
 
         this.setPlotState('Growing');
-        // Use delayedCall for the growth timer
-        this.growTimer = this.scene.time.delayedCall(GROW_TIME, () => {
+        // Calculate randomized grow time
+        const variation = BASE_GROW_TIME * GROW_TIME_VARIATION;
+        const randomGrowTime = BASE_GROW_TIME + Phaser.Math.Between(-variation, variation);
+        console.log(`Plot [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] starting growth, duration: ${(randomGrowTime / 1000).toFixed(1)}s`);
+
+        // Use delayedCall for the growth timer with the random duration
+        this.growTimer = this.scene.time.delayedCall(randomGrowTime, () => {
             if (this.currentState === 'Growing') { // Check if still growing (wasn't harvested)
                 this.setPlotState('Ripe');
             }

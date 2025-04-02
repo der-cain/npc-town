@@ -83,8 +83,8 @@ export default class Farmer extends NPC {
         console.log(`Farmer starting to harvest plot [${this.targetPlot.x.toFixed(0)}, ${this.targetPlot.y.toFixed(0)}]`);
         this.setNpcState('Harvesting');
 
-        // Simulate harvesting time
-        this.scene.time.delayedCall(2000, () => { // 2 seconds to harvest
+        // Simulate harvesting time (faster)
+        this.scene.time.delayedCall(500, () => { // 0.5 seconds to harvest
             if (this.currentState === 'Harvesting' && this.targetPlot) { // Check if still harvesting this plot
                 const success = this.targetPlot.harvest();
                 if (success) {
