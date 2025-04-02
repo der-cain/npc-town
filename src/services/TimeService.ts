@@ -121,13 +121,16 @@ export class TimeService extends Phaser.Events.EventEmitter {
             targetAlpha = this.maxNightAlpha; // Full night
         } else if (this._currentTimeOfDay >= dawnStart && this._currentTimeOfDay < dawnEnd) {
             // Dawn fade out (night alpha decreases)
-            targetAlpha = Phaser.Math.Linear(this.maxNightAlpha, 0, Phaser.Math.Percent(this._currentTimeOfDay, dawnStart, dawnEnd - dawnStart));
+            // Corrected 3rd arg for Percent: range = end - start
+            targetAlpha = Phaser.Math.Linear(this.maxNightAlpha, 0, Phaser.Math.Percent(this._currentTimeOfDay, dawnStart, dawnEnd));
         } else if (this._currentTimeOfDay >= duskStart && this._currentTimeOfDay < this.nightStartThreshold) {
             // Dusk fade in (partial)
-             targetAlpha = Phaser.Math.Linear(0, this.maxNightAlpha * 0.7, Phaser.Math.Percent(this._currentTimeOfDay, duskStart, this.nightStartThreshold - duskStart));
+            // Corrected 3rd arg for Percent: range = end - start
+             targetAlpha = Phaser.Math.Linear(0, this.maxNightAlpha * 0.7, Phaser.Math.Percent(this._currentTimeOfDay, duskStart, this.nightStartThreshold));
         } else if (this._currentTimeOfDay >= this.nightStartThreshold && this._currentTimeOfDay < duskEnd) {
             // Dusk fade in (full)
-             targetAlpha = Phaser.Math.Linear(this.maxNightAlpha * 0.7, this.maxNightAlpha, Phaser.Math.Percent(this._currentTimeOfDay, this.nightStartThreshold, duskEnd - this.nightStartThreshold));
+            // Corrected 3rd arg for Percent: range = end - start
+             targetAlpha = Phaser.Math.Linear(this.maxNightAlpha * 0.7, this.maxNightAlpha, Phaser.Math.Percent(this._currentTimeOfDay, this.nightStartThreshold, duskEnd));
         } else {
             targetAlpha = 0; // Full day
         }
