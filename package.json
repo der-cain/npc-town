@@ -1,0 +1,31 @@
+{
+  "name": "npc-town",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/der-cain/npc-town.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/der-cain/npc-town/issues"
+  },
+  "homepage": "https://github.com/der-cain/npc-town#readme",
+  "dependencies": {
+    "phaser": "^3.88.2",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.17"
+  }
+}

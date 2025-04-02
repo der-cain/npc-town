@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ESNext",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": true,
+    /* If NOT transpiling with TypeScript: */
+    "moduleResolution": "bundler", // Added for Vite compatibility
+    "module": "ESNext",
+    "noEmit": true, // Since Vite handles the bundling/emitting
+    /* If your code runs in the DOM: */
+    "lib": ["esnext", "dom", "dom.iterable"],
+    /* If you're building for a library: */
+    // "declaration": true,
+    /* If you're building for Node.js: */
+    // "module": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"] // Optional: Alias for cleaner imports
+    }
+  },
+  "include": ["src/**/*.ts", "vite.config.ts"], // Include Vite config
+  "exclude": ["node_modules", "dist"]
+}
