@@ -17,7 +17,7 @@ export class WineryLogic {
 
     // Define capacity limits (optional)
     public maxGrapes: number = 30; // Increased capacity
-    public maxWine: number = 5;
+    public maxWine: number = 10; // Increased capacity to decouple from batchSize
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
