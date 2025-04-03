@@ -14,10 +14,12 @@ import IdleState from './IdleState';
 /**
  * State representing the NPC moving towards a specific target position.
  * Handles checking for arrival and delegating the arrival logic to the NPC.
+ * Can now follow a sequence of points (a path).
  */
 export default class MovingState implements NpcState {
-    private targetPosition: Phaser.Math.Vector2 | null = null;
-    private _purpose: string | null = null; // Renamed for getter e.g., 'MovingToWork', 'MovingHome', 'MovingToHarvest', 'DeliveringGrapes', 'ReturningToWinery'
+    private path: Phaser.Geom.Point[] = []; // Array of points to follow
+    private currentTargetIndex: number = -1; // Index of the current target point in the path
+    private _purpose: string | null = null; // e.g., 'MovingToWork', 'MovingHome', 'MovingToHarvest', 'DeliveringGrapes', 'ReturningToWinery'
     private nextStateData: any = null; // Optional data for the *next* state after arrival (less used now)
 
     // Public getter for purpose
@@ -27,38 +29,97 @@ export default class MovingState implements NpcState {
 
     enter(npc: NPC, data?: any): void {
         console.log(`${npc.constructor.name} entering MovingState`);
-        if (data && data.targetPosition instanceof Phaser.Math.Vector2) {
-            this.targetPosition = data.targetPosition;
-            this._purpose = data.purpose || 'MovingToTarget'; // Default purpose
-            this.nextStateData = data.nextStateData || null; // Store any data intended for the *next* state
+        // Expect data.path to be an array of Geom.Point
+        if (data && Array.isArray(data.path) && data.path.length > 0) {
+            // Ensure all elements are Points (or convert if needed, though findPath returns Points)
+            this.path = data.path.map((p: any) => (p instanceof Phaser.Geom.Point ? p : new Phaser.Geom.Point(p.x, p.y)));
+            this._purpose = data.purpose || 'MovingAlongPath'; // Default purpose
+            this.nextStateData = data.nextStateData || null;
 
-            // targetPosition is guaranteed to be non-null here due to the instanceof check
-            // Use non-null assertion (!) to satisfy TypeScript
-            console.log(`${npc.constructor.name} moving to [${this.targetPosition!.x.toFixed(0)}, ${this.targetPosition!.y.toFixed(0)}] for purpose: ${this._purpose}`);
-            npc.setMovementTarget(this.targetPosition!); // Tell NPC physics to move
+            // Start moving towards the first point in the path (skip the very first point if it's the current location)
+            const firstPoint = this.path[0];
+            if (!firstPoint) { // Check if the first point exists
+                 console.error(`${npc.constructor.name} MovingState path is unexpectedly empty after validation! Transitioning to Idle.`);
+                 npc.changeState(new IdleState());
+                 return;
+            }
+            this.currentTargetIndex = (this.path.length > 1 && Phaser.Math.Distance.BetweenPointsSquared(npc, firstPoint) < 1) ? 1 : 0;
+
+
+            if (this.currentTargetIndex >= this.path.length) {
+                 console.warn(`${npc.constructor.name} MovingState path calculation resulted in invalid starting index. Transitioning to Idle.`);
+                 npc.changeState(new IdleState());
+                 return;
+            }
+
+            const firstTarget = this.path[this.currentTargetIndex];
+            // Add check for undefined target
+            if (!firstTarget) {
+                console.error(`${npc.constructor.name} MovingState could not get first target at index ${this.currentTargetIndex}. Transitioning to Idle.`);
+                npc.changeState(new IdleState());
+                return;
+            }
+            console.log(`${npc.constructor.name} starting path to [${firstTarget.x.toFixed(0)}, ${firstTarget.y.toFixed(0)}] (point ${this.currentTargetIndex + 1}/${this.path.length}) for purpose: ${this._purpose}`);
+            // Convert Geom.Point to Vector2 for setMovementTarget
+            npc.setMovementTarget(new Phaser.Math.Vector2(firstTarget.x, firstTarget.y));
+
         } else {
-            console.warn(`${npc.constructor.name} entered MovingState without a valid targetPosition! Transitioning to Idle.`);
-            npc.changeState(new IdleState()); // Can't move without a target
+            console.warn(`${npc.constructor.name} entered MovingState without a valid path! Transitioning to Idle.`);
+            npc.changeState(new IdleState()); // Can't move without a path
         }
     }
 
     update(npc: NPC, delta: number): void {
-        if (!this.targetPosition) return; // Should have transitioned out if no target
+        if (this.currentTargetIndex < 0 || this.currentTargetIndex >= this.path.length) {
+            // No valid target, should not happen if enter() logic is correct
+            return;
+        }
 
-        // Check for arrival
-        if (npc.hasReachedTarget(this.targetPosition, 5)) { // Use a threshold
-            const arrivedAt = this.targetPosition; // Store before clearing
-            const arrivalPurpose = this._purpose; // Store purpose before clearing in exit
+        const currentTargetPoint = this.path[this.currentTargetIndex];
+        // Add check for undefined target
+        if (!currentTargetPoint) {
+             console.error(`${npc.constructor.name} MovingState current target point at index ${this.currentTargetIndex} is undefined. Transitioning to Idle.`);
+             npc.changeState(new IdleState());
+             return;
+        }
+        // Convert Geom.Point to Vector2 for hasReachedTarget
+        const currentTargetVec = new Phaser.Math.Vector2(currentTargetPoint.x, currentTargetPoint.y);
 
-            console.log(`${npc.constructor.name} reached target [${arrivedAt.x.toFixed(0)}, ${arrivedAt.y.toFixed(0)}] for purpose: ${arrivalPurpose}`);
+        // Check for arrival at the current waypoint
+        if (npc.hasReachedTarget(currentTargetVec, 5)) { // Use a threshold
+            console.log(`${npc.constructor.name} reached waypoint ${this.currentTargetIndex + 1}/${this.path.length} [${currentTargetPoint.x.toFixed(0)}, ${currentTargetPoint.y.toFixed(0)}]`);
 
-            // Delegate arrival logic to the NPC instance
-            // The NPC's handleArrival method is now responsible for deciding the next state
-            npc.handleArrival(arrivalPurpose, arrivedAt);
+            // Move to the next point in the path
+            this.currentTargetIndex++;
 
-            // NOTE: We no longer call npc.changeState here. It's done within npc.handleArrival or methods called by it.
+            if (this.currentTargetIndex < this.path.length) {
+                // There's another point in the path
+                const nextTargetPoint = this.path[this.currentTargetIndex];
+                 // Add check for undefined target
+                if (!nextTargetPoint) {
+                    console.error(`${npc.constructor.name} MovingState next target point at index ${this.currentTargetIndex} is undefined. Reached end unexpectedly?`);
+                    // Treat as reaching the final destination with the previous point
+                    const finalDestination = currentTargetVec;
+                    const arrivalPurpose = this._purpose;
+                    npc.handleArrival(arrivalPurpose, finalDestination);
+                    return; // Exit update
+                }
+                console.log(`${npc.constructor.name} moving to next waypoint ${this.currentTargetIndex + 1}/${this.path.length} [${nextTargetPoint.x.toFixed(0)}, ${nextTargetPoint.y.toFixed(0)}]`);
+                // Convert Geom.Point to Vector2 for setMovementTarget
+                npc.setMovementTarget(new Phaser.Math.Vector2(nextTargetPoint.x, nextTargetPoint.y));
+            } else {
+                // Reached the final destination (the point we just arrived at)
+                console.log(`${npc.constructor.name} reached final destination.`);
+                const finalDestination = currentTargetVec; // The point we just arrived at
+                const arrivalPurpose = this._purpose; // Store purpose before clearing in exit
+
+                // Delegate arrival logic to the NPC instance
+                // The NPC's handleArrival method is now responsible for deciding the next state
+                npc.handleArrival(arrivalPurpose, finalDestination);
+                // NOTE: State change happens within handleArrival
+            }
         } else {
-            // Continue moving - physics engine handles this based on setMovementTarget
+            // Continue moving towards the current target waypoint
         }
     }
 
@@ -66,7 +127,8 @@ export default class MovingState implements NpcState {
         console.log(`${npc.constructor.name} exiting MovingState`);
         // IMPORTANT: Clear the movement target in the NPC itself when exiting this state
         npc.clearMovementTarget();
-        this.targetPosition = null; // Clear local reference
+        this.path = []; // Clear local path reference
+        this.currentTargetIndex = -1;
         this._purpose = null;
         this.nextStateData = null;
     }

@@ -13,7 +13,18 @@ export const LocationKeys = {
     ShopWineDropOff: 'shopWineDropOff',
     FarmerWorkPos: 'farmerWorkPos',
     WinemakerWorkPos: 'winemakerWorkPos',
-    ShopkeeperWorkPos: 'shopkeeperWorkPos'
+    ShopkeeperWorkPos: 'shopkeeperWorkPos',
+    // Door locations (entry/exit points for path system)
+    FarmerHomeDoor: 'farmerHomeDoor',
+    WinemakerHomeDoor: 'winemakerHomeDoor',
+    ShopkeeperHomeDoor: 'shopkeeperHomeDoor',
+    WineryDoor: 'wineryDoor', // Near grape drop-off/wine pickup
+    ShopDoor: 'shopDoor', // Near wine drop-off
+    // Path Waypoints (more descriptive names)
+    WpSouthJunction: 'wpSouthJunction', // Junction near homes
+    WpMidJunction: 'wpMidJunction',     // Midpoint on main vertical path
+    WpNorthJunction: 'wpNorthJunction',   // Junction near Vineyard/Winery level
+    WpShopTurn: 'wpShopTurn'          // Turn towards shop
 };
 
 // Interface for area definitions (optional, but good practice)
@@ -28,12 +39,31 @@ interface AreaDefinition {
 export class LocationService {
     private locations: Map<string, Phaser.Geom.Point> = new Map();
     private areas: Map<string, AreaDefinition> = new Map();
+    // Graph representation of path connections (Adjacency List)
+    private pathConnections: Map<string, string[]> = new Map();
+    // Set of keys considered "on the main path" or directly connected
+    private onPathLocationKeys: Set<string> = new Set([
+        LocationKeys.FarmerHomeDoor,
+        LocationKeys.WinemakerHomeDoor,
+        LocationKeys.ShopkeeperHomeDoor,
+        LocationKeys.WineryDoor,
+        LocationKeys.ShopDoor,
+        LocationKeys.WpSouthJunction, // Use new waypoint keys
+        LocationKeys.WpMidJunction,
+        LocationKeys.WpNorthJunction,
+        LocationKeys.WpShopTurn,
+        // Add work positions if they should directly connect to path
+        // LocationKeys.FarmerWorkPos, // Keep off-path for now
+        LocationKeys.WinemakerWorkPos, // Equivalent to WineryDoor essentially
+        LocationKeys.ShopkeeperWorkPos // Equivalent to ShopDoor essentially
+    ]);
 
     constructor() {
-        this.defineLocations();
+        this.defineLocationsAndPaths(); // Renamed constructor call
     }
 
-    private defineLocations(): void {
+    // Renamed method definition
+    private defineLocationsAndPaths(): void {
         // --- Define Areas ---
         const vineyardX = 50;
         const vineyardY = 50;
@@ -78,9 +108,76 @@ export class LocationService {
         const homeSpacing = 100;
         this.locations.set(LocationKeys.FarmerHome, new Phaser.Geom.Point(200, homeY));
         this.locations.set(LocationKeys.WinemakerHome, new Phaser.Geom.Point(200 + homeSpacing, homeY));
+        // Duplicate line removed below
         this.locations.set(LocationKeys.ShopkeeperHome, new Phaser.Geom.Point(200 + homeSpacing * 2, homeY));
 
-        console.log('LocationService defined locations and areas.');
+        // --- Define Path Nodes (Doors & Waypoints) based on image ---
+
+        // Door locations (approximated from image)
+        const farmerDoor = new Phaser.Geom.Point(200, homeY - 30);
+        const winemakerDoor = new Phaser.Geom.Point(300, homeY - 30);
+        const shopkeeperDoor = new Phaser.Geom.Point(400, homeY - 30);
+        const wineryDoor = new Phaser.Geom.Point(wineryX + wineryWidth / 2, wineryY + wineryHeight + 15); // Below winery
+        const shopDoor = new Phaser.Geom.Point(shopX + shopWidth / 2, shopY - 15); // Above shop
+        const vineyardDoor = new Phaser.Geom.Point(vineyardX + vineyardWidth + 15, vineyardY + vineyardHeight / 2); // Right of vineyard
+
+        this.locations.set(LocationKeys.FarmerHomeDoor, farmerDoor);
+        this.locations.set(LocationKeys.WinemakerHomeDoor, winemakerDoor);
+        this.locations.set(LocationKeys.ShopkeeperHomeDoor, shopkeeperDoor);
+        this.locations.set(LocationKeys.WineryDoor, wineryDoor);
+        this.locations.set(LocationKeys.ShopDoor, shopDoor);
+        // Add Vineyard Door if needed, though FarmerWorkPos might suffice
+        // this.locations.set(LocationKeys.VineyardDoor, vineyardDoor); // Keep commented for now
+
+        // Waypoints based on image path structure
+        const wpSouthJunction = new Phaser.Geom.Point(300, homeY - 30); // Aligned with Winemaker door, junction for homes path
+        const wpMidJunction = new Phaser.Geom.Point(300, 300);      // Midpoint on vertical path
+        const wpNorthJunction = new Phaser.Geom.Point(300, wineryY + wineryHeight + 15); // Level with Winery Door, junction for vineyard/winery path
+        const wpShopTurn = new Phaser.Geom.Point(shopX + shopWidth / 2, wineryY + wineryHeight + 15); // Point where path turns towards shop
+
+        this.locations.set(LocationKeys.WpSouthJunction, wpSouthJunction);
+        this.locations.set(LocationKeys.WpMidJunction, wpMidJunction);
+        this.locations.set(LocationKeys.WpNorthJunction, wpNorthJunction);
+        this.locations.set(LocationKeys.WpShopTurn, wpShopTurn);
+
+        // Define path connections (Adjacency List)
+        this.pathConnections.set(LocationKeys.FarmerHomeDoor, [LocationKeys.WpSouthJunction]);
+        this.pathConnections.set(LocationKeys.WinemakerHomeDoor, [LocationKeys.WpSouthJunction]);
+        this.pathConnections.set(LocationKeys.ShopkeeperHomeDoor, [LocationKeys.WpSouthJunction]);
+
+        this.pathConnections.set(LocationKeys.WpSouthJunction, [
+            LocationKeys.FarmerHomeDoor,
+            LocationKeys.WinemakerHomeDoor,
+            LocationKeys.ShopkeeperHomeDoor,
+            LocationKeys.WpMidJunction
+        ]);
+
+        this.pathConnections.set(LocationKeys.WpMidJunction, [
+            LocationKeys.WpSouthJunction,
+            LocationKeys.WpNorthJunction
+        ]);
+
+        this.pathConnections.set(LocationKeys.WpNorthJunction, [
+            LocationKeys.WpMidJunction,
+            LocationKeys.WineryDoor, // Connection to Winery
+            LocationKeys.WpShopTurn, // Connection towards Shop
+            // LocationKeys.VineyardDoor // Add if VineyardDoor is used
+        ]);
+
+        // Add connection from VineyardDoor if used
+        // this.pathConnections.set(LocationKeys.VineyardDoor, [LocationKeys.WpNorthJunction]);
+
+        this.pathConnections.set(LocationKeys.WineryDoor, [LocationKeys.WpNorthJunction]);
+
+        this.pathConnections.set(LocationKeys.WpShopTurn, [
+            LocationKeys.WpNorthJunction,
+            LocationKeys.ShopDoor
+        ]);
+
+        this.pathConnections.set(LocationKeys.ShopDoor, [LocationKeys.WpShopTurn]);
+
+
+        console.log('LocationService defined locations, areas, path nodes, and connections.');
     }
 
     /**
@@ -136,4 +233,125 @@ export class LocationService {
 
     // Add methods for getting random points within areas if needed later
     // public getRandomPointInArea(key: string): Phaser.Geom.Point | null { ... }
+
+    /**
+     * Finds a path (sequence of points) between two locations.
+     * If both start and end are "on path" locations, it uses the main waypoint path.
+     * Otherwise, it returns a direct path.
+     * @param startPoint The starting position vector.
+     * @param endPoint The ending position vector.
+     * @param startKey Optional key for the starting location (used to check if on path).
+     * @param endKey Optional key for the ending location (used to check if on path).
+     * @returns An array of Phaser.Geom.Point representing the path.
+     */
+    public findPath(startPoint: Phaser.Math.Vector2, endPoint: Phaser.Math.Vector2, startKey?: string, endKey?: string): Phaser.Geom.Point[] {
+        const startIsOnPath = startKey ? this.onPathLocationKeys.has(startKey) : false;
+        const endIsOnPath = endKey ? this.onPathLocationKeys.has(endKey) : false;
+
+        // If both start and end keys are provided and are valid path nodes, use BFS
+        if (startIsOnPath && endIsOnPath && startKey && endKey) {
+            console.log(`Finding graph path: ${startKey} -> ${endKey}`);
+
+            // --- BFS Implementation ---
+            const queue: { key: string; path: string[] }[] = [{ key: startKey, path: [startKey] }];
+            const visited: Set<string> = new Set([startKey]);
+            let foundPathKeys: string[] | null = null;
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                if (!current) continue; // Should not happen
+
+                if (current.key === endKey) {
+                    foundPathKeys = current.path;
+                    break; // Found the target
+                }
+
+                const neighbors = this.pathConnections.get(current.key) || [];
+                for (const neighborKey of neighbors) {
+                    if (!visited.has(neighborKey)) {
+                        visited.add(neighborKey);
+                        const newPath = [...current.path, neighborKey];
+                        queue.push({ key: neighborKey, path: newPath });
+                    }
+                }
+            }
+            // --- End BFS ---
+
+            if (foundPathKeys) {
+                // Convert keys back to points
+                const pointPath = foundPathKeys.map(key => this.locations.get(key)).filter(p => p !== undefined) as Phaser.Geom.Point[];
+
+                // Prepend actual start point, append actual end point
+                const finalPath = [
+                    new Phaser.Geom.Point(startPoint.x, startPoint.y),
+                    ...pointPath.map(p => Phaser.Geom.Point.Clone(p)), // Clone points from path
+                    new Phaser.Geom.Point(endPoint.x, endPoint.y)
+                ];
+
+                // Optional: Smooth path by removing redundant intermediate points
+                // Only smooth if the path has intermediate nodes (length >= 3: start, node, end)
+                if (finalPath.length >= 3) {
+                    const firstNode = finalPath[1]; // First node from BFS result
+                    const startPointNode = finalPath[0]; // Actual start point
+
+                    // Check if start point is very close to the first BFS node
+                    if (firstNode && startPointNode && Phaser.Math.Distance.BetweenPointsSquared(startPointNode, firstNode) < 1) {
+                        finalPath.splice(1, 1); // Remove the first BFS node
+                    }
+                }
+                 // Check only if path still has at least start + end + one node (length >= 3 after potential first splice)
+                 if (finalPath.length >= 3) {
+                    const secondLastNode = finalPath[finalPath.length - 2]; // Second-to-last node (might be a BFS node or the start point)
+                    const lastNode = finalPath[finalPath.length - 1]; // Actual end point
+
+                    // Check if end point is very close to the second-to-last node
+                    if (secondLastNode && lastNode && Phaser.Math.Distance.BetweenPointsSquared(secondLastNode, lastNode) < 1) {
+                         // Remove the second-to-last node ONLY if it's not the start point itself
+                         if (finalPath.length > 2) { // Ensure we don't remove the start point if it's the only one left besides the end
+                            finalPath.splice(finalPath.length - 2, 1);
+                         }
+                    }
+                 }
+
+
+                console.log(`Graph path found with ${finalPath.length} points.`);
+                return finalPath;
+            } else {
+                console.warn(`BFS could not find path from ${startKey} to ${endKey}. Returning direct path.`);
+                return [new Phaser.Geom.Point(startPoint.x, startPoint.y), new Phaser.Geom.Point(endPoint.x, endPoint.y)];
+            }
+
+        } else {
+            // Otherwise (e.g., moving to a specific plot or one key is invalid/off-path), return a direct path
+            console.log(`Finding direct path (off-path or invalid keys): ${startKey || 'current pos'} -> ${endKey || 'target pos'}`);
+            return [new Phaser.Geom.Point(startPoint.x, startPoint.y), new Phaser.Geom.Point(endPoint.x, endPoint.y)];
+        }
+    }
+
+    // Removed findClosestWaypointIndex method
+
+    // Removed mainPathWaypointsClone getter
+
+    /**
+     * Gets a clone of the path node locations map (used for drawing).
+     * @returns A new Map containing the path node keys and their points.
+     */
+    public get pathNodesClone(): Map<string, Phaser.Geom.Point> {
+        const nodes = new Map<string, Phaser.Geom.Point>();
+        this.onPathLocationKeys.forEach(key => {
+            const point = this.locations.get(key);
+            if (point) {
+                nodes.set(key, Phaser.Geom.Point.Clone(point));
+            }
+        });
+        return nodes;
+    }
+
+     /**
+     * Gets the direct connections for a given path node key.
+     * @returns A new array containing the keys of connected nodes.
+     */
+    public getConnections(key: string): string[] {
+        return [...(this.pathConnections.get(key) || [])];
+    }
 }

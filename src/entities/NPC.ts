@@ -12,11 +12,13 @@ const NPC_SPEED = 80; // Pixels per second
 export default class NPC extends Phaser.Physics.Arcade.Sprite {
     public currentState!: NpcState;
     public inventory: Item | null = null;
-    protected currentScene: GameScene; // Keep for scene interactions
+    public currentScene: GameScene; // Made public for states/logic to access services easily
     public timeService: TimeService; // Made public for states to access
     private stateText: Phaser.GameObjects.Text;
-    public homePosition: Phaser.Geom.Point | null = null;
-    public workPosition: Phaser.Geom.Point | null = null;
+    public homePosition: Phaser.Geom.Point | null = null; // Actual home location
+    public workPosition: Phaser.Geom.Point | null = null; // Actual work location
+    public homeDoorKey: string | null = null; // Key for the door near home (set by GameScene)
+    public workPositionKey: string | null = null; // Key for the work position/area entry (set by GameScene)
 
     // Modified constructor to accept TimeService
     constructor(scene: GameScene, x: number, y: number, timeService: TimeService, texture: string | Phaser.Textures.Texture = 'npc_placeholder', frame?: string | number) {
@@ -149,13 +151,19 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         }
 
         // If we have a home position, go there
-        if (this.homePosition) {
-            console.log(`${this.constructor.name} received GoHomeTime event! Heading home.`);
-            const homeVec = new Phaser.Math.Vector2(this.homePosition.x, this.homePosition.y);
-            // Force state change immediately
-            this.changeState(new MovingState(), { targetPosition: homeVec, purpose: 'MovingHome' });
+        // If we have a home position and door key, find path home
+        if (this.homePosition && this.homeDoorKey) {
+            console.log(`${this.constructor.name} received GoHomeTime event! Finding path home.`);
+            const startPos = new Phaser.Math.Vector2(this.x, this.y);
+            const endPos = new Phaser.Math.Vector2(this.homePosition.x, this.homePosition.y);
+            // Assume starting from work position key, find path to home door key
+            // Pass undefined if keys are null
+            const startKey = this.workPositionKey ?? undefined;
+            const endKey = this.homeDoorKey ?? undefined;
+            const path = this.currentScene.locationService.findPath(startPos, endPos, startKey, endKey);
+            this.changeState(new MovingState(), { path: path, purpose: 'MovingHome' });
         } else {
-            // No home? Rest in place.
+            // No home position/key? Rest in place.
             console.log(`${this.constructor.name} received GoHomeTime event, but no home position. Resting in place.`);
             this.changeState(new RestingState());
         }

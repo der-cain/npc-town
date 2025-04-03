@@ -35,10 +35,13 @@ export default class Farmer extends NPC {
         if (this.inventory && this.inventory.quantity >= this.maxInventory) {
             console.log('Farmer checking work: Inventory full, moving to winery.');
             this.targetPlot = null; // Ensure plot target is cleared
-            // Use LocationService to get the point
-            const targetPoint = this.currentScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff);
+            const startPos = new Phaser.Math.Vector2(this.x, this.y);
+            const endPoint = this.currentScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff); // Actual drop-off point
+            const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y);
+            // Pathfind to the WineryDoor node, then the final step is handled by MovingState
+            const path = this.currentScene.locationService.findPath(startPos, endPos, undefined, LocationKeys.WineryDoor);
             this.changeState(new MovingState(), {
-                targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y),
+                path: path,
                 purpose: 'DeliveringGrapes'
             });
             return; // Don't look for plots if delivering
@@ -52,9 +55,12 @@ export default class Farmer extends NPC {
             const ripePlot = Phaser.Utils.Array.GetRandom(availablePlots);
             console.log(`Farmer checking work: Found ripe plot at [${ripePlot.x.toFixed(0)}, ${ripePlot.y.toFixed(0)}]`);
             this.targetPlot = ripePlot; // Set the target plot on the farmer instance
-            // Transition to MovingState to go to the plot
+            // Transition to MovingState to go to the plot (direct path, not using waypoints)
+            const startPos = new Phaser.Math.Vector2(this.x, this.y);
+            const endPos = new Phaser.Math.Vector2(ripePlot.x, ripePlot.y);
+            const path = this.currentScene.locationService.findPath(startPos, endPos); // No keys needed for direct path
             this.changeState(new MovingState(), {
-                targetPosition: new Phaser.Math.Vector2(ripePlot.x, ripePlot.y),
+                path: path,
                 purpose: 'MovingToHarvest',
             });
         } else {
@@ -136,10 +142,13 @@ export default class Farmer extends NPC {
                     // Decide next action
                     if (this.inventory.quantity >= this.maxInventory) {
                         console.log('Farmer inventory full after harvest, moving to winery.');
-                        // Use LocationService to get the point
-                        const targetPoint = this.currentScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff);
+                        const startPos = new Phaser.Math.Vector2(this.x, this.y);
+                        const endPoint = this.currentScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff); // Actual drop-off point
+                        const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y);
+                        // Pathfind to the WineryDoor node
+                        const path = this.currentScene.locationService.findPath(startPos, endPos, undefined, LocationKeys.WineryDoor);
                         this.targetPlot = null; // Clear target plot before moving
-                        this.changeState(new MovingState(), { targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y), purpose: 'DeliveringGrapes' });
+                        this.changeState(new MovingState(), { path: path, purpose: 'DeliveringGrapes' });
                     } else {
                         // Look for another plot immediately
                     console.log('Farmer looking for next plot.');

@@ -111,14 +111,25 @@ export default class GameScene extends Phaser.Scene {
     this.winemaker = new Winemaker(this, winemakerHome.x, winemakerHome.y, this.timeService);
     this.shopkeeper = new Shopkeeper(this, shopkeeperHome.x, shopkeeperHome.y, this.timeService);
 
-    // Assign home and work positions using LocationService
+    // Assign home/work positions and their corresponding keys using LocationService
     this.farmer.homePosition = farmerHome;
+    this.farmer.homeDoorKey = LocationKeys.FarmerHomeDoor;
     this.farmer.workPosition = this.locationService.getPoint(LocationKeys.FarmerWorkPos);
+    this.farmer.workPositionKey = LocationKeys.FarmerWorkPos;
+
     this.winemaker.homePosition = winemakerHome;
-    this.winemaker.workPosition = this.locationService.getPoint(LocationKeys.WinemakerWorkPos);
+    this.winemaker.homeDoorKey = LocationKeys.WinemakerHomeDoor;
+    this.winemaker.workPosition = this.locationService.getPoint(LocationKeys.WinemakerWorkPos); // Actual work spot
+    this.winemaker.workPositionKey = LocationKeys.WineryDoor; // Key for pathfinding graph node
+
     this.shopkeeper.homePosition = shopkeeperHome;
-    this.shopkeeper.workPosition = this.locationService.getPoint(LocationKeys.ShopkeeperWorkPos);
+    this.shopkeeper.homeDoorKey = LocationKeys.ShopkeeperHomeDoor;
+    this.shopkeeper.workPosition = this.locationService.getPoint(LocationKeys.ShopkeeperWorkPos); // Actual work spot
+    this.shopkeeper.workPositionKey = LocationKeys.ShopDoor; // Key for pathfinding graph node
     console.log('Created NPCs at home, resting.');
+
+    // --- Draw Path (Optional Visualisation) ---
+    this.drawMainPath();
 
     // --- Create UI via UIManager ---
     this.uiManager.createUIElements();
@@ -150,5 +161,34 @@ export default class GameScene extends Phaser.Scene {
     this.uiManager.updateInventoryTexts();
 
     // NPC updates are handled by their preUpdate methods (which delegate to states)
+  }
+
+  /** Draws the path graph connections for visualization */
+  private drawMainPath(): void {
+      const nodes = this.locationService.pathNodesClone; // Use the getter for nodes
+      if (nodes.size === 0) return;
+
+      const graphics = this.add.graphics();
+      graphics.lineStyle(2, 0xffd966, 0.6); // Light orange path, 60% alpha
+      graphics.setDepth(1); // Draw below NPCs/UI but above background
+
+      const drawnConnections = new Set<string>(); // To avoid drawing lines twice
+
+      nodes.forEach((point1, key1) => {
+          const connections = this.locationService.getConnections(key1);
+          connections.forEach(key2 => {
+              // Create a unique key for the connection pair to avoid duplicates
+              const connectionKey = [key1, key2].sort().join('-');
+              if (!drawnConnections.has(connectionKey)) {
+                  const point2 = nodes.get(key2);
+                  if (point1 && point2) {
+                      graphics.lineBetween(point1.x, point1.y, point2.x, point2.y);
+                      drawnConnections.add(connectionKey);
+                  }
+              }
+          });
+      });
+
+      console.log('Drew path graph visualization.');
   }
 }

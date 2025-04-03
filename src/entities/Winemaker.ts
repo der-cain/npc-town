@@ -34,11 +34,15 @@ export default class Winemaker extends NPC {
             if (collected) {
                 console.log(`Winemaker collected batch of ${this.batchSize} wine.`);
                 this.inventory = { type: 'Wine', quantity: this.batchSize };
-                // Move to the shop drop-off point using LocationService
-                const shopTarget = this.currentScene.locationService.getPoint(LocationKeys.ShopWineDropOff);
+                // Move to the shop drop-off point using LocationService pathfinding
+                const startPos = new Phaser.Math.Vector2(this.x, this.y);
+                const endPoint = this.currentScene.locationService.getPoint(LocationKeys.ShopWineDropOff); // Actual drop-off
+                const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y);
+                // Pathfind from WineryDoor to ShopDoor
+                const path = this.currentScene.locationService.findPath(startPos, endPos, LocationKeys.WineryDoor, LocationKeys.ShopDoor);
                 this.changeState(new MovingState(), {
-                    targetPosition: new Phaser.Math.Vector2(shopTarget.x, shopTarget.y),
-                    purpose: 'DeliveringWine' // New purpose for clarity
+                    path: path,
+                    purpose: 'DeliveringWine'
                 });
             } else {
                 // Should not happen if wineInventory >= batchSize, but good to handle
@@ -71,11 +75,15 @@ export default class Winemaker extends NPC {
             console.log('Shop did not accept wine (maybe full?). Winemaker keeps wine.');
             // Winemaker might wait or try again later - for now, just go idle
         }
-        // After attempting delivery, move back to the winery pickup point to wait using LocationService
-        const wineryTarget = this.currentScene.locationService.getPoint(LocationKeys.WinemakerWorkPos); // WinemakerWorkPos is same as WineryWinePickup
+        // After attempting delivery, move back to the winery pickup point using LocationService pathfinding
+        const startPos = new Phaser.Math.Vector2(this.x, this.y); // Current pos (should be near shop drop off)
+        const endPoint = this.currentScene.locationService.getPoint(LocationKeys.WinemakerWorkPos); // Actual work position
+        const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y);
+        // Pathfind from ShopDoor back to WineryDoor
+        const path = this.currentScene.locationService.findPath(startPos, endPos, LocationKeys.ShopDoor, LocationKeys.WineryDoor);
         this.changeState(new MovingState(), {
-            targetPosition: new Phaser.Math.Vector2(wineryTarget.x, wineryTarget.y),
-            purpose: 'ReturningToWinery' // New purpose for clarity
+            path: path,
+            purpose: 'ReturningToWinery'
         });
     }
 
