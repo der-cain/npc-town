@@ -24,8 +24,9 @@ export const LocationKeys = {
     // Path Waypoints (more descriptive names)
     WpSouthJunction: 'wpSouthJunction', // Junction near homes
     WpMidJunction: 'wpMidJunction',     // Midpoint on main vertical path
-    WpCenterJunction: 'WpCenterJunction',   // Junction near Vineyard/Winery level
-    WpShopTurn: 'wpShopTurn'          // Turn towards shop
+    WpSouthMidJunction: 'wpSouthMidJunction', // New waypoint between Mid and South
+    WpNorthJunction: 'wpNorthJunction',   // Renamed from WpCenterJunction
+    WpEastJunction: 'wpEastJunction'    // Renamed from WpShopTurn
 };
 
 // Interface for area definitions (optional, but good practice)
@@ -51,8 +52,9 @@ export class LocationService {
         LocationKeys.ShopDoor,
         LocationKeys.WpSouthJunction, // Use new waypoint keys
         LocationKeys.WpMidJunction,
-        LocationKeys.WpCenterJunction,
-        LocationKeys.WpShopTurn,
+        LocationKeys.WpSouthMidJunction, // Add new waypoint
+        LocationKeys.WpNorthJunction, // Renamed from WpCenterJunction
+        LocationKeys.WpEastJunction, // Renamed from WpShopTurn
         // Add work positions if they should directly connect to path
         LocationKeys.FarmerWorkPos, // Add Farmer work pos to path network
         LocationKeys.WinemakerWorkPos, // Equivalent to WineryDoor essentially
@@ -100,7 +102,7 @@ export class LocationService {
         this.locations.set(LocationKeys.ShopWineDropOff, new Phaser.Geom.Point(shopX + shopWidth / 2, shopY - 10));
 
         // Work positions
-        this.locations.set(LocationKeys.FarmerWorkPos, new Phaser.Geom.Point(vineyardX + vineyardWidth / 2, vineyardY + vineyardHeight + 10));
+        this.locations.set(LocationKeys.FarmerWorkPos, new Phaser.Geom.Point(vineyardX + vineyardWidth + 15, vineyardY + vineyardHeight / 2 + 15));
         this.locations.set(LocationKeys.WinemakerWorkPos, this.getPoint(LocationKeys.WineryWinePickup)); // Reuse point
         this.locations.set(LocationKeys.ShopkeeperWorkPos, new Phaser.Geom.Point(shopX + shopWidth / 2, shopY + shopHeight / 2));
 
@@ -132,14 +134,16 @@ export class LocationService {
 
         // Waypoints based on image path structure
         const wpSouthJunction = new Phaser.Geom.Point(300, homeY - 30); // Aligned with Winemaker door, junction for homes path
-        const wpMidJunction = new Phaser.Geom.Point(300, 300);      // Midpoint on vertical path
-        const wpCenterJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 300); // Level with Winery Door, junction for vineyard/winery path
-        const wpShopTurn = new Phaser.Geom.Point(shopX + shopWidth / 2, wineryY + wineryHeight + 15); // Point where path turns towards shop
+        const wpMidJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 410);      // Midpoint on vertical path
+        const wpSouthMidJunction = new Phaser.Geom.Point(300, 410); // New waypoint position
+        const wpNorthJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 250); // Renamed variable, Level with Winery Door, junction for vineyard/winery path
+        const wpEastJunction = new Phaser.Geom.Point(shopX + shopWidth / 2, 250); // Renamed variable
 
         this.locations.set(LocationKeys.WpSouthJunction, wpSouthJunction);
         this.locations.set(LocationKeys.WpMidJunction, wpMidJunction);
-        this.locations.set(LocationKeys.WpCenterJunction, wpCenterJunction);
-        this.locations.set(LocationKeys.WpShopTurn, wpShopTurn);
+        this.locations.set(LocationKeys.WpSouthMidJunction, wpSouthMidJunction); // Set new waypoint location
+        this.locations.set(LocationKeys.WpNorthJunction, wpNorthJunction); // Renamed key and variable
+        this.locations.set(LocationKeys.WpEastJunction, wpEastJunction); // Renamed key and variable
 
         // Define path connections (Adjacency List)
         this.pathConnections.set(LocationKeys.FarmerHomeDoor, [LocationKeys.WpSouthJunction]);
@@ -150,37 +154,42 @@ export class LocationService {
             LocationKeys.FarmerHomeDoor,
             LocationKeys.WinemakerHomeDoor,
             LocationKeys.ShopkeeperHomeDoor,
+            LocationKeys.WpSouthMidJunction // Connect South to new waypoint
+        ]);
+
+        // Connections for the new waypoint
+        this.pathConnections.set(LocationKeys.WpSouthMidJunction, [
+            LocationKeys.WpSouthJunction,
             LocationKeys.WpMidJunction
         ]);
 
         this.pathConnections.set(LocationKeys.WpMidJunction, [
-            LocationKeys.WpSouthJunction,
-            LocationKeys.WpCenterJunction
+            LocationKeys.WpSouthMidJunction, // Connect Mid to new waypoint
+            LocationKeys.WpNorthJunction // Renamed key
         ]);
 
-        this.pathConnections.set(LocationKeys.WpCenterJunction, [
+        this.pathConnections.set(LocationKeys.WpNorthJunction, [ // Renamed key
             LocationKeys.WpMidJunction,
             LocationKeys.WineryDoor, // Connection to Winery
-            LocationKeys.WpShopTurn, // Connection towards Shop
-            LocationKeys.FarmerWorkPos // Connection to Farmer work area
-            // LocationKeys.VineyardDoor // Add if VineyardDoor is used
+            LocationKeys.WpEastJunction, // Renamed key
+            LocationKeys.FarmerWorkPos, // Connection to Farmer work area
+            LocationKeys.VineyardDoor // Add if VineyardDoor is used
         ]);
 
         // Add connection from FarmerWorkPos back to the junction
-        this.pathConnections.set(LocationKeys.FarmerWorkPos, [LocationKeys.WpCenterJunction]);
+        this.pathConnections.set(LocationKeys.FarmerWorkPos, [LocationKeys.WpNorthJunction]); // Renamed key
 
         // Add connection from VineyardDoor if used
-        // this.pathConnections.set(LocationKeys.VineyardDoor, [LocationKeys.WpCenterJunction]);
+        // this.pathConnections.set(LocationKeys.VineyardDoor, [LocationKeys.WpNorthJunction]); // Renamed key (commented out)
 
-        this.pathConnections.set(LocationKeys.WineryDoor, [LocationKeys.WpCenterJunction]);
+        this.pathConnections.set(LocationKeys.WineryDoor, [LocationKeys.WpNorthJunction]); // Renamed key
 
-        this.pathConnections.set(LocationKeys.WpShopTurn, [
-            LocationKeys.WpCenterJunction,
+        this.pathConnections.set(LocationKeys.WpEastJunction, [ // Renamed key
+            LocationKeys.WpNorthJunction, // Renamed key
             LocationKeys.ShopDoor
         ]);
 
-        this.pathConnections.set(LocationKeys.ShopDoor, [LocationKeys.WpShopTurn]);
-
+        this.pathConnections.set(LocationKeys.ShopDoor, [LocationKeys.WpEastJunction]); // Renamed key
 
         console.log('LocationService defined locations, areas, path nodes, and connections.');
     }
