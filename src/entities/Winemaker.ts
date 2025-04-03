@@ -26,31 +26,58 @@ export default class Winemaker extends NPC {
             return;
         }
 
-        // Check if winery has a full batch available and we have no inventory
-        if (this.currentScene.wineryLogic.wineInventory >= this.batchSize && this.inventory === null) {
+        // Priority 1: Deliver existing inventory
+        if (this.inventory && this.inventory.type === 'Wine') {
+            console.log(`Winemaker checking work: Has ${this.inventory.quantity} wine to deliver.`);
+            // Move to the shop drop-off point using LocationService pathfinding
+            const startPos = new Phaser.Math.Vector2(this.x, this.y);
+            const endPoint = this.currentScene.locationService.getPoint(LocationKeys.ShopWineDropOff); // Actual drop-off
+            const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y);
+            // Pathfind from current location (likely near WineryDoor or Home) to ShopDoor
+            // Determine start location key based on proximity or assume WineryDoor if close enough?
+            // For simplicity, let's assume pathfinding handles starting near the winery work pos correctly.
+            // We might need a more robust way to determine the *logical* start location key if pathfinding fails.
+            const path = this.currentScene.locationService.findPath(startPos, endPos, LocationKeys.WineryDoor, LocationKeys.ShopDoor); // Assume starting near winery
+            if (path && path.length > 0) {
+                this.changeState(new MovingState(), {
+                    path: path,
+                    purpose: 'DeliveringWine'
+                });
+            } else {
+                 console.warn(`Winemaker failed to find path to shop from ${startPos.x},${startPos.y}. Remaining Idle.`);
+            }
+            return; // Don't check for new batches if delivering existing one
+        }
+
+        // Priority 2: Collect a new batch if inventory is empty
+        if (this.inventory === null && this.currentScene.wineryLogic.wineInventory >= this.batchSize) {
             console.log(`Winemaker checking work: Found batch of ${this.batchSize} wine available.`);
             // Try to collect the full batch
             const collected = this.currentScene.wineryLogic.collectWine(this.batchSize);
             if (collected) {
                 console.log(`Winemaker collected batch of ${this.batchSize} wine.`);
                 this.inventory = { type: 'Wine', quantity: this.batchSize };
-                // Move to the shop drop-off point using LocationService pathfinding
+                // Now that we have collected, immediately try to deliver (similar logic to above)
                 const startPos = new Phaser.Math.Vector2(this.x, this.y);
-                const endPoint = this.currentScene.locationService.getPoint(LocationKeys.ShopWineDropOff); // Actual drop-off
+                const endPoint = this.currentScene.locationService.getPoint(LocationKeys.ShopWineDropOff);
                 const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y);
-                // Pathfind from WineryDoor to ShopDoor
                 const path = this.currentScene.locationService.findPath(startPos, endPos, LocationKeys.WineryDoor, LocationKeys.ShopDoor);
-                this.changeState(new MovingState(), {
-                    path: path,
-                    purpose: 'DeliveringWine'
-                });
+                 if (path && path.length > 0) {
+                    this.changeState(new MovingState(), {
+                        path: path,
+                        purpose: 'DeliveringWine'
+                    });
+                } else {
+                    console.warn(`Winemaker collected wine but failed to find path to shop from ${startPos.x},${startPos.y}. Remaining Idle (with inventory).`);
+                    // Note: Now the next check will trigger the delivery logic above.
+                }
             } else {
                 // Should not happen if wineInventory >= batchSize, but good to handle
                 console.warn(`Winemaker tried to collect batch of ${this.batchSize}, but failed unexpectedly.`);
                 // Remain Idle
             }
         }
-        // Else: Remain Idle if no batch is ready or inventory is not empty
+        // Else: Remain Idle if no inventory to deliver, and no batch is ready or winery is full.
     }
 
     // Note: stopMovement logic is now handled within MovingState.update/exit

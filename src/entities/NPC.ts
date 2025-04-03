@@ -185,10 +185,14 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         this.updateAppearance();
     }
 
-    /** Updates the debug state text content and position */
+    /** Updates the debug state text content and position, including inventory */
     protected updateAppearance() {
         if (this.stateText && this.currentState) {
-            this.stateText.setText(this.currentState.constructor.name.replace('State', '')); // Show simplified state name
+            let labelText = this.currentState.constructor.name.replace('State', ''); // Show simplified state name
+            if (this.inventory) {
+                labelText += ` (${this.inventory.type}: ${this.inventory.quantity})`; // Add inventory info
+            }
+            this.stateText.setText(labelText);
             this.stateText.setPosition(this.x, this.y - this.displayHeight / 2 - 2);
         }
     }
