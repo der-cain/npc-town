@@ -354,4 +354,16 @@ export class LocationService {
     public getConnections(key: string): string[] {
         return [...(this.pathConnections.get(key) || [])];
     }
+
+    /**
+     * Gets a clone of the locations map.
+     * @returns A new Map containing all defined location keys and their points.
+     */
+    public get locationsClone(): Map<string, Phaser.Geom.Point> {
+        const clonedLocations = new Map<string, Phaser.Geom.Point>();
+        this.locations.forEach((point, key) => {
+            clonedLocations.set(key, Phaser.Geom.Point.Clone(point));
+        });
+        return clonedLocations;
+    }
 }

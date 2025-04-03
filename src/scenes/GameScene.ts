@@ -128,8 +128,8 @@ export default class GameScene extends Phaser.Scene {
     this.shopkeeper.workPositionKey = LocationKeys.ShopDoor; // Key for pathfinding graph node
     console.log('Created NPCs at home, resting.');
 
-    // --- Draw Path (Optional Visualisation) ---
-    this.drawMainPath();
+    // --- Draw Debug Locations (Paths, Doors, Work Positions) ---
+    this.drawDebugLocations();
 
     // --- Create UI via UIManager ---
     this.uiManager.createUIElements();
@@ -163,24 +163,24 @@ export default class GameScene extends Phaser.Scene {
     // NPC updates are handled by their preUpdate methods (which delegate to states)
   }
 
-  /** Draws the path graph connections for visualization */
-  private drawMainPath(): void {
-      const nodes = this.locationService.pathNodesClone; // Use the getter for nodes
-      if (nodes.size === 0) return;
+  /** Draws path graph, doors, and work positions for visualization */
+  private drawDebugLocations(): void {
+      const pathNodes = this.locationService.pathNodesClone;
+      const allLocations = this.locationService.locationsClone;
+      if (pathNodes.size === 0 && allLocations.size === 0) return;
 
       const graphics = this.add.graphics();
-      graphics.lineStyle(2, 0xffd966, 0.6); // Light orange path, 60% alpha
       graphics.setDepth(1); // Draw below NPCs/UI but above background
 
-      const drawnConnections = new Set<string>(); // To avoid drawing lines twice
-
-      nodes.forEach((point1, key1) => {
+      // --- Draw Path Connections ---
+      graphics.lineStyle(2, 0xffd966, 0.6); // Light orange path
+      const drawnConnections = new Set<string>();
+      pathNodes.forEach((point1, key1) => {
           const connections = this.locationService.getConnections(key1);
           connections.forEach(key2 => {
-              // Create a unique key for the connection pair to avoid duplicates
               const connectionKey = [key1, key2].sort().join('-');
               if (!drawnConnections.has(connectionKey)) {
-                  const point2 = nodes.get(key2);
+                  const point2 = pathNodes.get(key2); // Get from pathNodes map
                   if (point1 && point2) {
                       graphics.lineBetween(point1.x, point1.y, point2.x, point2.y);
                       drawnConnections.add(connectionKey);
@@ -188,7 +188,32 @@ export default class GameScene extends Phaser.Scene {
               }
           });
       });
-
       console.log('Drew path graph visualization.');
+
+      // --- Draw Markers for All Locations ---
+      const markerRadius = 3;
+      const labelStyle = { fontSize: '8px', color: '#dddddd', backgroundColor: 'rgba(0,0,0,0.5)' };
+
+      allLocations.forEach((point, key) => {
+          let color = 0x888888; // Default grey for unknown/other
+          if (key.includes('Door')) {
+              color = 0xff0000; // Red for doors
+          } else if (key.includes('Wp')) {
+              color = 0x0000ff; // Blue for waypoints
+          } else if (key.includes('WorkPos')) {
+              color = 0x00ff00; // Green for work positions
+          } else if (key.includes('DropOff') || key.includes('Pickup')) {
+              color = 0xffff00; // Yellow for interaction points
+          }
+
+          graphics.fillStyle(color, 0.8);
+          graphics.fillCircle(point.x, point.y, markerRadius);
+
+          // Add text label slightly offset
+          this.add.text(point.x + markerRadius + 1, point.y, key, labelStyle)
+              .setOrigin(0, 0.5)
+              .setDepth(graphics.depth + 1); // Ensure label is above marker/path
+      });
+      console.log('Drew location markers visualization.');
   }
 }
