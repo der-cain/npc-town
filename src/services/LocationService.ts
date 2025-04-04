@@ -28,6 +28,7 @@ export const LocationKeys = {
     WpNorthJunction: 'wpNorthJunction',   // Renamed from WpCenterJunction
     WpEastJunction: 'wpEastJunction',    // Renamed from WpShopTurn
     WpSouthJunction: 'wpSouthJunction', // New waypoint below MidJunction
+    WpSouthEastJunction: 'wpSouthEastJunction', // New waypoint connected to SouthJunction
     // Customer points
     CustomerSpawnPoint: 'customerSpawnPoint', // Where customers appear
     CustomerDespawnPoint: 'customerDespawnPoint' // Where customers disappear
@@ -60,6 +61,7 @@ export class LocationService {
         LocationKeys.WpNorthJunction, // Renamed from WpCenterJunction
         LocationKeys.WpEastJunction, // Renamed from WpShopTurn
         LocationKeys.WpSouthJunction, // Add new waypoint
+        LocationKeys.WpSouthEastJunction, // Add new waypoint
         // Add work positions if they should directly connect to path
         LocationKeys.FarmerWorkPos, // Add Farmer work pos to path network
         LocationKeys.WinemakerWorkPos, // Equivalent to WineryDoor essentially
@@ -144,11 +146,13 @@ export class LocationService {
         const wpNorthJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 250); // Renamed variable, Level with Winery Door, junction for vineyard/winery path
         const wpEastJunction = new Phaser.Geom.Point(shopX + shopWidth / 2, 250); // Renamed variable
         const wpSouthJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 510); // New waypoint below MidJunction (410 + 100)
+        const wpSouthEastJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2 + 250, 510); // New waypoint SE of SouthJunction
 
         this.locations.set(LocationKeys.WpSouthWestJunction, wpSouthWestJunction); // Renamed key and variable
         this.locations.set(LocationKeys.WpMidJunction, wpMidJunction);
         this.locations.set(LocationKeys.WpSouthMidJunction, wpSouthMidJunction); // Set new waypoint location
         this.locations.set(LocationKeys.WpSouthJunction, wpSouthJunction); // Set new waypoint location
+        this.locations.set(LocationKeys.WpSouthEastJunction, wpSouthEastJunction); // Set new waypoint location
         this.locations.set(LocationKeys.WpNorthJunction, wpNorthJunction); // Renamed key and variable
         this.locations.set(LocationKeys.WpEastJunction, wpEastJunction); // Renamed key and variable
 
@@ -177,7 +181,8 @@ export class LocationService {
 
         // Connections for the new South waypoint
         this.pathConnections.set(LocationKeys.WpSouthJunction, [
-            LocationKeys.WpMidJunction
+            LocationKeys.WpMidJunction,
+            LocationKeys.WpSouthEastJunction
         ]);
 
         this.pathConnections.set(LocationKeys.WpMidJunction, [
@@ -192,6 +197,10 @@ export class LocationService {
             LocationKeys.FarmerWorkPos, // Connection to Farmer work area
             LocationKeys.VineyardDoor // Add if VineyardDoor is used
         ]);
+
+        this.pathConnections.set(LocationKeys.WpSouthEastJunction, [LocationKeys.WpSouthJunction, LocationKeys.CustomerDespawnPoint]);
+
+        this.pathConnections.set(LocationKeys.CustomerSpawnPoint, [LocationKeys.WpSouthEastJunction]);
 
         // Add connection from FarmerWorkPos back to the junction
         this.pathConnections.set(LocationKeys.FarmerWorkPos, [LocationKeys.WpNorthJunction]); // Renamed key
