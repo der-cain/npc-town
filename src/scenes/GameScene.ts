@@ -3,9 +3,12 @@ import VineyardPlot from '../entities/VineyardPlot';
 import Farmer from '../entities/Farmer';
 import Winemaker from '../entities/Winemaker';
 import Shopkeeper from '../entities/Shopkeeper';
+import Customer from '../entities/Customer'; // Import Customer
 import { WineryLogic } from '../logic/WineryLogic';
 import { ShopLogic } from '../logic/ShopLogic';
 import NPC from '../entities/NPC';
+import DespawnedState from '../states/customer/DespawnedState'; // Import DespawnedState for checking
+import EnteringShopState from '../states/customer/EnteringShopState'; // Import for initial state
 import { TimeService } from '../services/TimeService'; // Import TimeService
 import { UIManager } from '../ui/UIManager'; // Import UIManager
 import { LocationService, LocationKeys } from '../services/LocationService'; // Import LocationService
@@ -22,9 +25,12 @@ export default class GameScene extends Phaser.Scene {
 
   // --- Game Objects ---
   public vineyardPlots: VineyardPlot[] = []; // Made public
-  private farmer!: Farmer; // Keep private if only accessed via scene methods/logic
+  private farmer!: Farmer;
   private winemaker!: Winemaker;
   private shopkeeper!: Shopkeeper;
+  private customerGroup!: Phaser.GameObjects.Group; // Group for customers
+  private customerSpawnTimer: number = 0; // Timer accumulator for spawning
+  private customerSpawnInterval: number = 5000; // ms between spawn attempts
 
   // Removed old UI/Time/Location properties - managed by services now
 
@@ -37,8 +43,8 @@ export default class GameScene extends Phaser.Scene {
     // Generate placeholder NPC textures (colored circles)
     const npcRadius = 8;
     const npcDiameter = npcRadius * 2;
-    const textures = ['npc_farmer', 'npc_winemaker', 'npc_shopkeeper'];
-    const colors = [0x00ff00, 0x0000ff, 0xffff00]; // Green, Blue, Yellow
+    const textures = ['npc_farmer', 'npc_winemaker', 'npc_shopkeeper', 'npc_customer']; // Add customer texture
+    const colors = [0x00ff00, 0x0000ff, 0xffff00, 0xff00ff]; // Green, Blue, Yellow, Magenta for customer
 
     textures.forEach((key, index) => {
         if (!this.textures.exists(key)) { // Avoid recreating textures on hot reload
@@ -128,6 +134,13 @@ export default class GameScene extends Phaser.Scene {
     this.shopkeeper.workPositionKey = LocationKeys.ShopDoor; // Key for pathfinding graph node
     console.log('Created NPCs at home, resting.');
 
+    // --- Create Customer Group ---
+    this.customerGroup = this.add.group({
+        classType: Customer,
+        runChildUpdate: true // Ensure customer updates are called
+    });
+    console.log('Created Customer group.');
+
     // --- Draw Debug Locations (Paths, Doors, Work Positions) ---
     this.drawDebugLocations();
 
@@ -161,7 +174,69 @@ export default class GameScene extends Phaser.Scene {
     this.uiManager.updateInventoryTexts();
 
     // NPC updates are handled by their preUpdate methods (which delegate to states)
+
+    // --- Customer Spawning Logic ---
+    this.handleCustomerSpawning(delta);
+
+    // --- Customer Despawning Logic ---
+    this.handleCustomerDespawning();
   }
+
+  /** Handles spawning customers based on time and interval */
+  private handleCustomerSpawning(delta: number): void {
+    // Check if it's daytime (8:00 - 16:00)
+    const currentTime = this.timeService.currentTimeOfDay;
+    const isShopOpen = currentTime >= (8 / 24) && currentTime < (16 / 24);
+
+    if (isShopOpen) {
+        this.customerSpawnTimer += delta;
+        if (this.customerSpawnTimer >= this.customerSpawnInterval) {
+            this.customerSpawnTimer = 0; // Reset timer
+
+            // Add a chance to spawn, e.g., 50% chance per interval
+            if (Math.random() < 0.5) {
+                this.spawnCustomer();
+            }
+        }
+    } else {
+        // Reset timer if shop is closed
+        this.customerSpawnTimer = 0;
+    }
+  }
+
+  /** Creates a new customer instance */
+  private spawnCustomer(): void {
+    try {
+        const spawnPoint = this.locationService.getPoint(LocationKeys.CustomerSpawnPoint);
+        // Create customer slightly off-screen using the spawn point coordinates
+        const customer = new Customer(this, spawnPoint.x, spawnPoint.y, this.timeService);
+        this.customerGroup.add(customer); // Add to group
+        console.log(`Spawned customer ${customer.name} at [${spawnPoint.x}, ${spawnPoint.y}]`);
+        // Set initial state to start moving towards the shop
+        customer.changeState(new EnteringShopState());
+    } catch (error) {
+        console.error("Error spawning customer:", error);
+    }
+  }
+
+  /** Checks for and removes customers in the DespawnedState */
+  private handleCustomerDespawning(): void {
+    const customersToRemove: Customer[] = [];
+    this.customerGroup.getChildren().forEach((customerGO) => {
+        const customer = customerGO as Customer;
+        if (customer.currentState instanceof DespawnedState) {
+            customersToRemove.push(customer);
+        }
+    });
+
+    if (customersToRemove.length > 0) {
+        console.log(`Despawning ${customersToRemove.length} customers.`);
+        customersToRemove.forEach(customer => {
+            this.customerGroup.remove(customer, true, true); // Remove from group and destroy
+        });
+    }
+  }
+
 
   /** Draws path graph, doors, and work positions for visualization */
   private drawDebugLocations(): void {

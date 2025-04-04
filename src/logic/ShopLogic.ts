@@ -11,7 +11,7 @@ const CUSTOMER_BUY_CHANCE = 0.7; // 70% chance a customer buys if wine is availa
 export class ShopLogic {
     private scene: Phaser.Scene;
     public wineInventory: number = 0;
-    private customerTimer?: Phaser.Time.TimerEvent;
+    // private customerTimer?: Phaser.Time.TimerEvent; // Removed old timer
 
     // Define capacity limits (optional)
     public maxWine: number = 10;
@@ -19,7 +19,7 @@ export class ShopLogic {
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
         console.log('ShopLogic initialized.');
-        this.startCustomerSimulation();
+        // this.startCustomerSimulation(); // Removed old simulation start
     }
 
     // Method for Winemaker to drop off wine
@@ -44,33 +44,11 @@ export class ShopLogic {
         return false;
     }
 
-    // Simulate customers arriving and buying
-    private startCustomerSimulation(): void {
-        this.customerTimer = this.scene.time.addEvent({
-            delay: CUSTOMER_ARRIVAL_RATE,
-            callback: this.simulateCustomer,
-            callbackScope: this,
-            loop: true
-        });
-        console.log('Shop customer simulation started.');
-    }
+    // Removed simulateCustomer and startCustomerSimulation methods
 
-    private simulateCustomer(): void {
-        console.log('Customer arrived at shop.');
-        if (this.wineInventory > 0) {
-            if (Math.random() < CUSTOMER_BUY_CHANCE) {
-                console.log('Customer is buying wine...');
-                this.sellWine(1); // Customer buys 1 wine
-            } else {
-                console.log('Customer looked but did not buy.');
-            }
-        } else {
-            console.log('Customer arrived, but shop has no wine.');
-        }
-    }
-
-    // Cleanup timers on shutdown
+    // Cleanup timers on shutdown (if any were added back)
     public shutdown() {
-        this.customerTimer?.remove();
+        // this.customerTimer?.remove(); // Removed old timer cleanup
+        console.log('ShopLogic shutdown.');
     }
 }
