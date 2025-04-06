@@ -45,7 +45,7 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
 
         // Listen for TimeService events
         this.timeService.on(TimeEvents.GoHomeTime, this.handleGoHomeTime, this);
-        this.timeService.on(TimeEvents.StartWorkTime, this.handleStartWorkTime, this); // Listen for start work
+        this.timeService.on(TimeEvents.DayStarted, this.handleDayStartedEvent, this); // Listen for day start
     }
 
     // --- State Management ---
@@ -175,11 +175,11 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
         }
     }
 
-    /** Handles the StartWorkTime event from TimeService */
-    private handleStartWorkTime(): void {
+    /** Handles the DayStarted event from TimeService, triggering state resumption or start-of-day logic */
+    private handleDayStartedEvent(): void {
         // Only trigger start-of-day behavior if currently resting
         if (this.currentState instanceof RestingState) {
-            console.log(`${this.constructor.name} received StartWorkTime event while resting.`);
+            console.log(`${this.constructor.name} received DayStarted event while resting.`);
             // Check if we should resume and if there's a state to resume
             if (this.previousStateBeforeResting) {
                 console.log(`${this.constructor.name} should resume. Resuming previous state: ${this.previousStateBeforeResting.constructor.name}`);
@@ -193,10 +193,9 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
                 this.previousStateBeforeResting = null; // Ensure it's cleared
             }
         } else {
-             // console.log(`${this.constructor.name} received StartWorkTime event but not resting (state: ${this.currentState?.constructor.name}). Ignoring.`);
+             // console.log(`${this.constructor.name} received DayStarted event but not resting (state: ${this.currentState?.constructor.name}). Ignoring.`);
         }
     }
-
 
     // --- Update Loop ---
 
@@ -237,7 +236,7 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
         this.currentState?.exit(this);
         // Remove event listeners
         this.timeService.off(TimeEvents.GoHomeTime, this.handleGoHomeTime, this);
-        this.timeService.off(TimeEvents.StartWorkTime, this.handleStartWorkTime, this); // Remove start work listener
+        this.timeService.off(TimeEvents.DayStarted, this.handleDayStartedEvent, this); // Remove day start listener
         super.destroy(fromScene);
     }
 }
