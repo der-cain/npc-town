@@ -34,8 +34,10 @@ export default class Customer extends NPC {
      * Customers simply despawn, letting the regular spawner handle new arrivals.
      */
     public handleStartDay(): void {
-        console.log("Customer received StartWorkTime while resting. Despawning.");
-        this.changeState(new EnteringShopState());
+        // If a customer is somehow still around and resting when the day starts,
+        // they should be removed.
+        console.log("Customer was resting at DayStart. Changing to DespawnedState.");
+        this.changeState(new DespawnedState());
     }
 
     /**

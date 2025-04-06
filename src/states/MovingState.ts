@@ -20,7 +20,9 @@ export default class MovingState implements NpcState {
     private path: Phaser.Geom.Point[] = []; // Array of points to follow
     private currentTargetIndex: number = -1; // Index of the current target point in the path
     private _purpose: string | null = null; // e.g., 'MovingToWork', 'MovingHome', 'MovingToHarvest', 'DeliveringGrapes', 'ReturningToWinery'
-    private nextStateData: any = null; // Optional data for the *next* state after arrival (less used now)
+    // nextStateData is likely less useful now as handleArrival determines the next state based on purpose
+    // private nextStateData: any = null;
+    // movementStarted flag is no longer needed as enter() is always called on new instances
 
     // Public getter for purpose
     public get purpose(): string | null {
@@ -28,48 +30,61 @@ export default class MovingState implements NpcState {
     }
 
     enter(npc: NPC, data?: any): void {
-        console.log(`${npc.constructor.name} entering MovingState`);
-        // Expect data.path to be an array of Geom.Point
+        // Expect data.path to be an array of Geom.Point, and optionally purpose/currentTargetIndex
         if (data && Array.isArray(data.path) && data.path.length > 0) {
-            // Ensure all elements are Points (or convert if needed, though findPath returns Points)
+            console.log(`${npc.constructor.name} entering MovingState`);
             this.path = data.path.map((p: any) => (p instanceof Phaser.Geom.Point ? p : new Phaser.Geom.Point(p.x, p.y)));
             this._purpose = data.purpose || 'MovingAlongPath'; // Default purpose
-            this.nextStateData = data.nextStateData || null;
 
-            // Start moving towards the first point in the path (skip the very first point if it's the current location)
-            const firstPoint = this.path[0];
-            if (!firstPoint) { // Check if the first point exists
-                 console.error(`${npc.constructor.name} MovingState path is unexpectedly empty after validation! Transitioning to Idle.`);
-                 npc.changeState(new IdleState());
-                 return;
+            // Use provided index if resuming, otherwise calculate
+            if (typeof data.currentTargetIndex === 'number' && data.currentTargetIndex >= 0 && data.currentTargetIndex < this.path.length) {
+                 this.currentTargetIndex = data.currentTargetIndex;
+                 console.log(`  -> Resuming at index: ${this.currentTargetIndex}`);
+            } else {
+                // Calculate initial target index based on current position
+                const firstPoint = this.path[0];
+                if (!firstPoint) { // Should not happen due to outer check, but safety first
+                    console.error(`${npc.constructor.name} MovingState path is unexpectedly empty after validation! Transitioning to Idle.`);
+                    npc.changeState(new IdleState());
+                    return;
+                }
+                 // Start at index 1 if already very close to index 0 and path has more points
+                this.currentTargetIndex = (this.path.length > 1 && Phaser.Math.Distance.BetweenPointsSquared(npc, firstPoint) < 1) ? 1 : 0;
+                console.log(`  -> Calculated start index: ${this.currentTargetIndex}`);
             }
-            this.currentTargetIndex = (this.path.length > 1 && Phaser.Math.Distance.BetweenPointsSquared(npc, firstPoint) < 1) ? 1 : 0;
 
-
-            if (this.currentTargetIndex >= this.path.length) {
-                 console.warn(`${npc.constructor.name} MovingState path calculation resulted in invalid starting index. Transitioning to Idle.`);
-                 npc.changeState(new IdleState());
-                 return;
-            }
-
-            const firstTarget = this.path[this.currentTargetIndex];
-            // Add check for undefined target
-            if (!firstTarget) {
-                console.error(`${npc.constructor.name} MovingState could not get first target at index ${this.currentTargetIndex}. Transitioning to Idle.`);
+            // Validate the final target index
+            if (this.currentTargetIndex < 0 || this.currentTargetIndex >= this.path.length) {
+                console.warn(`${npc.constructor.name} MovingState has invalid target index ${this.currentTargetIndex} for path length ${this.path.length}. Transitioning to Idle.`);
                 npc.changeState(new IdleState());
                 return;
             }
-            console.log(`${npc.constructor.name} starting path to [${firstTarget.x.toFixed(0)}, ${firstTarget.y.toFixed(0)}] (point ${this.currentTargetIndex + 1}/${this.path.length}) for purpose: ${this._purpose}`);
-            // Convert Geom.Point to Vector2 for setMovementTarget
-            npc.setMovementTarget(new Phaser.Math.Vector2(firstTarget.x, firstTarget.y));
+
+            // Get the target point
+            const targetPoint = this.path[this.currentTargetIndex];
+            if (!targetPoint) {
+                console.error(`${npc.constructor.name} MovingState could not get target point at index ${this.currentTargetIndex}. Transitioning to Idle.`);
+                npc.changeState(new IdleState());
+                return;
+            }
+
+            // Log and initiate movement
+            console.log(`${npc.constructor.name} starting path towards [${targetPoint.x.toFixed(0)}, ${targetPoint.y.toFixed(0)}] (point ${this.currentTargetIndex + 1}/${this.path.length}) for purpose: ${this._purpose}`);
+            npc.setMovementTarget(new Phaser.Math.Vector2(targetPoint.x, targetPoint.y));
 
         } else {
+            // Invalid data provided
             console.warn(`${npc.constructor.name} entered MovingState without a valid path! Transitioning to Idle.`);
             npc.changeState(new IdleState()); // Can't move without a path
         }
     }
 
+    // _initiateMovement helper is no longer needed
+
     update(npc: NPC, delta: number): void {
+        // --- Standard movement update logic ---
+        // No need for the !this.movementStarted check anymore
+
         if (this.currentTargetIndex < 0 || this.currentTargetIndex >= this.path.length) {
             // No valid target, should not happen if enter() logic is correct
             return;
@@ -127,9 +142,20 @@ export default class MovingState implements NpcState {
         console.log(`${npc.constructor.name} exiting MovingState`);
         // IMPORTANT: Clear the movement target in the NPC itself when exiting this state
         npc.clearMovementTarget();
-        this.path = []; // Clear local path reference
-        this.currentTargetIndex = -1;
-        this._purpose = null;
-        this.nextStateData = null;
+        // No need to clear internal state here as a new instance will be created next time
+        // this.path = [];
+        // this.currentTargetIndex = -1;
+        // this._purpose = null;
+    }
+
+    /**
+     * Provides the necessary data for resuming this state.
+     */
+    public getResumptionData(): any {
+        return {
+            path: this.path,
+            currentTargetIndex: this.currentTargetIndex,
+            purpose: this._purpose
+        };
     }
 }

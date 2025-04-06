@@ -23,4 +23,11 @@ export default interface NpcState {
      * @param npc The NPC leaving the state.
      */
     exit(npc: NPC): void;
+
+    /**
+     * Optional method for a state to provide data needed for its resumption.
+     * Called by NPC when saving state before resting in place.
+     * @returns An object containing necessary data, or undefined/null if no specific data is needed.
+     */
+    getResumptionData?(): any;
 }

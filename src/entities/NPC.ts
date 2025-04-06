@@ -9,9 +9,18 @@ import { TimeService, TimeEvents } from '../services/TimeService'; // Import Tim
 
 const NPC_SPEED = 80; // Pixels per second
 
+// Define an interface for storing state information for resumption
+interface StoredStateInfo {
+    // Using 'any' for constructor type as specific state types aren't known here easily
+    // and we primarily need it to check instanceof MovingState later.
+    // A more type-safe approach might involve a registry or discriminated union.
+    stateConstructor: any;
+    data?: any; // Data needed to re-initialize the state (e.g., path, index, purpose for MovingState)
+}
+
 export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make class abstract
     public currentState!: NpcState;
-    public previousStateBeforeResting: NpcState | null = null; // State before going to rest
+    public previousStateBeforeResting: StoredStateInfo | null = null; // Store state info, not instance
     public inventory: Item | null = null;
     public currentScene: GameScene; // Made public for states/logic to access services easily
     public timeService: TimeService; // Made public for states to access
@@ -162,16 +171,34 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
             const startKey = this.workPositionKey ?? undefined;
             const endKey = this.homeDoorKey ?? undefined;
             const path = this.currentScene.locationService.findPath(startPos, endPos, startKey, endKey);
+            // Intentially do not save the previousStateBeforeResting if we have a homePosition and homeDoorKey
             this.changeState(new MovingState(), { path: path, purpose: 'MovingHome' });
         } else {
             // No home position/key? Rest in place.
             console.log(`${this.constructor.name} received GoHomeTime event, but no home position. Resting in place.`);
-            // Ensure state is saved even if resting in place, *if* flag is set
+            // Save state info if not already resting/moving home
             if (!(this.currentState instanceof RestingState) && !(this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome')) {
-                this.previousStateBeforeResting = this.currentState;
-                console.log(`${this.constructor.name} saving state ${this.currentState.constructor.name} before resting in place (resume enabled).`);
+                // Get resumption data from the current state, if the method exists
+                const resumptionData = typeof this.currentState.getResumptionData === 'function'
+                    ? this.currentState.getResumptionData()
+                    : {}; // Default to empty object if method doesn't exist
+
+                console.log(`${this.constructor.name} saving state ${this.currentState.constructor.name} before resting in place. Data:`, resumptionData);
+
+                this.previousStateBeforeResting = {
+                    stateConstructor: this.currentState.constructor, // Store the constructor
+                    data: resumptionData // Store the data returned by the state
+                };
+
+                // --- Manual State Transition to Resting (without calling exit on previous) ---
+                const oldStateName = this.currentState?.constructor.name || 'None';
+                const newState = new RestingState();
+                this.currentState = newState; // Directly assign
+                console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] state: ${oldStateName} -> ${newState.constructor.name} (Manual Rest)`);
+                newState.enter(this); // Only call enter on the new state
+                this.updateAppearance();
+                // --- End Manual Transition ---
             }
-            this.changeState(new RestingState());
         }
     }
 
@@ -180,15 +207,22 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
         // Only trigger start-of-day behavior if currently resting
         if (this.currentState instanceof RestingState) {
             console.log(`${this.constructor.name} received DayStarted event while resting.`);
-            // Check if we should resume and if there's a state to resume
+            // Check if we should resume and if there's state info to resume from
             if (this.previousStateBeforeResting) {
-                console.log(`${this.constructor.name} should resume. Resuming previous state: ${this.previousStateBeforeResting.constructor.name}`);
-                const stateToResume = this.previousStateBeforeResting;
-                this.previousStateBeforeResting = null; // Clear before changing state
-                this.changeState(stateToResume);
+                const stateInfo = this.previousStateBeforeResting;
+                this.previousStateBeforeResting = null; // Clear saved info
+
+                console.log(`${this.constructor.name} should resume. Recreating state: ${stateInfo.stateConstructor.name}`);
+
+                // Create a new instance of the state using the stored constructor
+                const newStateInstance = new stateInfo.stateConstructor();
+
+                // Use the standard changeState method to handle exit/enter and pass data
+                this.changeState(newStateInstance, stateInfo.data);
+
             } else {
-                // Either shouldn't resume (like Customer) or no state was saved
-                console.log(`${this.constructor.name} Calling specific handleStartDay.`);
+                // Either shouldn't resume or no state info was saved
+                console.log(`${this.constructor.name} No state to resume or should not resume. Calling specific handleStartDay.`);
                 this.handleStartDay(); // Call the specific NPC's start day logic
                 this.previousStateBeforeResting = null; // Ensure it's cleared
             }
@@ -204,9 +238,11 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
      * Time-based logic is now handled by the TimeService event listener.
      */
     preUpdate(time: number, delta: number) {
+        // console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] preUpdate running. State: ${this.currentState?.constructor.name}`); // DEBUG LOG
         super.preUpdate(time, delta);
 
         // --- Delegate to Current State ---
+        // console.log(`${this.constructor.name} preUpdate: About to call update on state: ${this.currentState?.constructor.name}`); // DEBUG LOG
         this.currentState?.update(this, delta);
 
         // Update debug text position
@@ -225,9 +261,7 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
         }
     }
 
-
     // --- Cleanup ---
-
     destroy(fromScene?: boolean) {
         if (this.stateText) {
             this.stateText.destroy();
