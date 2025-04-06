@@ -4,7 +4,6 @@ import NPC from '../../entities/NPC'; // Use base NPC type
 import Customer from '../../entities/Customer'; // Specific type for casting if needed
 import GameScene from '../../scenes/GameScene';
 import MovingState from '../MovingState';
-import DespawnedState from './DespawnedState'; // Need this for transition
 import { LocationKeys } from '../../services/LocationService';
 
 const BUY_DURATION = 2000; // ms (2 seconds)
@@ -20,18 +19,17 @@ export default class BuyingWineState implements NpcState {
         customer.clearMovementTarget(); // Stop moving if somehow still moving
 
         this.hasAttemptedBuy = false;
-
-        // Start a timer to simulate the buying process
-        this.buyTimer = customer.currentScene.time.delayedCall(BUY_DURATION, () => {
-            this.attemptToBuy(customer);
-        });
+        this.scheduleBuyAttempt(customer); // Use a helper to schedule/reschedule
     }
 
     update(npc: NPC, delta: number): void {
-        // Logic is handled by the timer callback
-        // If the timer finished and buy attempt was made, transition
+        // Logic is now primarily handled by the timer callback and attemptToBuy
+        // Transition happens when hasAttemptedBuy becomes true
         if (this.hasAttemptedBuy) {
-            this.startLeaving(npc as Customer);
+            // Ensure we are not already leaving (e.g., if update runs multiple times after timer)
+            if (!(npc.currentState instanceof MovingState && (npc.currentState as MovingState).purpose === 'LeavingShop')) {
+                 this.startLeaving(npc as Customer);
+            }
         }
     }
 
@@ -42,34 +40,58 @@ export default class BuyingWineState implements NpcState {
             this.buyTimer.remove();
             this.buyTimer = null;
         }
-        this.hasAttemptedBuy = false;
+        this.hasAttemptedBuy = false; // Reset flag on exit
     }
 
-    private attemptToBuy(customer: Customer): void {
-        if (this.hasAttemptedBuy) return; // Prevent multiple attempts
+    // Helper method to schedule the buy attempt timer
+    private scheduleBuyAttempt(customer: Customer): void {
+        // Clear existing timer if any
+        if (this.buyTimer) {
+            this.buyTimer.remove();
+        }
+        // Schedule new timer
+        this.buyTimer = customer.currentScene.time.delayedCall(BUY_DURATION, () => {
+            this.attemptToBuy(customer);
+        }, [], this); // Pass context
+    }
 
-        const scene = customer.currentScene as GameScene; // Cast scene
+
+    private attemptToBuy(customer: Customer): void {
+        // Don't attempt if already decided/succeeded (flag is set in update)
+        if (this.hasAttemptedBuy) return;
+
+        const scene = customer.currentScene as GameScene;
         console.log(`${customer.constructor.name} attempting to buy wine.`);
 
         if (scene.shopLogic.wineInventory > 0) {
+            // Shop has wine
             if (Math.random() < BUY_CHANCE) {
+                // Customer decides to buy
                 const bought = scene.shopLogic.sellWine(1);
                 if (bought) {
                     console.log(`${customer.constructor.name} successfully bought wine.`);
-                    // Optional: Add visual feedback (e.g., show item briefly)
+                    this.hasAttemptedBuy = true; // Success, mark as done
                 } else {
-                    console.log(`${customer.constructor.name} tried to buy wine, but failed (shop error?).`);
+                    // This case should ideally not happen if inventory > 0, but handle defensively
+                    console.error(`${customer.constructor.name} tried to buy wine, but sellWine failed unexpectedly.`);
+                    this.hasAttemptedBuy = true; // Mark as done to avoid infinite loop on error
                 }
             } else {
-                console.log(`${customer.constructor.name} decided not to buy wine.`);
+                // Customer decided not to buy this time
+                console.log(`${customer.constructor.name} decided not to buy wine this time.`);
+                this.hasAttemptedBuy = true; // Decided not to buy, mark as done
             }
         } else {
-            console.log(`${customer.constructor.name} wanted wine, but shop is empty.`);
+            // Shop is empty
+            console.log(`${customer.constructor.name} wanted wine, but shop is empty. Waiting...`);
+            // DO NOT set hasAttemptedBuy = true
+            // Reschedule the check
+            this.scheduleBuyAttempt(customer);
         }
 
-        this.hasAttemptedBuy = true; // Mark buy attempt as complete
-        // Transition will happen in the next update() call
+        // Note: Transition to leaving now happens in update() when hasAttemptedBuy is true
     }
+
 
     private startLeaving(customer: Customer): void {
         console.log(`${customer.constructor.name} finished buying process, starting to leave.`);

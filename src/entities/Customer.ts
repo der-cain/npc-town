@@ -2,14 +2,17 @@ import Phaser from 'phaser';
 import NPC from './NPC';
 import GameScene from '../scenes/GameScene';
 import { TimeService } from '../services/TimeService';
-import { LocationKeys } from '../services/LocationService';
-import MovingState from '../states/MovingState';
 // Import customer states
 import BuyingWineState from '../states/customer/BuyingWineState';
-import DespawnedState from '../states/customer/DespawnedState';
-import IdleState from '../states/IdleState'; // Fallback state
+import DespawnedState from '../states/customer/DespawnedState'; // Needed for handleStartDay and handleGoHomeTime
+import EnteringShopState from '@/states/customer/EnteringShopState';
+// Import base states needed
+import NpcState from '../states/NpcState';
+import RestingState from '../states/RestingState';
+
 
 export default class Customer extends NPC {
+    private stateBeforeResting: NpcState | null = null; // To store state before resting
 
     constructor(scene: GameScene, x: number, y: number, timeService: TimeService) {
         // Use a specific texture key for customers
@@ -25,6 +28,16 @@ export default class Customer extends NPC {
         // this.changeState(new IdleState());
         console.log(`Customer created at [${x.toFixed(0)}, ${y.toFixed(0)}]`);
     }
+
+    /**
+     * Defines the customer's behavior at the start of the workday.
+     * Customers simply despawn, letting the regular spawner handle new arrivals.
+     */
+    public handleStartDay(): void {
+        console.log("Customer received StartWorkTime while resting. Despawning.");
+        this.changeState(new EnteringShopState());
+    }
+
 
     /**
      * Handles arrival logic specific to the Customer.

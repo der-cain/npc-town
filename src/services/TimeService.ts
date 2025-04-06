@@ -2,9 +2,10 @@ import Phaser from 'phaser';
 
 // Define event names for clarity
 export const TimeEvents = {
-    DayStarted: 'dayStarted',
-    NightStarted: 'nightStarted',
-    GoHomeTime: 'goHomeTime',
+    DayStarted: 'dayStarted', // Visual day start (light appears)
+    StartWorkTime: 'startWorkTime', // NPCs start their workday
+    NightStarted: 'nightStarted', // Visual night start (darkness appears)
+    GoHomeTime: 'goHomeTime', // NPCs start heading home
     TimeUpdate: 'timeUpdate' // For general time updates if needed
 };
 
@@ -73,8 +74,9 @@ export class TimeService extends Phaser.Events.EventEmitter {
 
         // Emit events based on transitions
         if (this._isDaytime && !previouslyDaytime) {
-            console.log("--- Day Started (TimeService) ---");
-            this.emit(TimeEvents.DayStarted);
+            console.log("--- Day/Work Started (TimeService) ---");
+            this.emit(TimeEvents.DayStarted); // For visual transition
+            this.emit(TimeEvents.StartWorkTime); // For NPC behavior start
         } else if (!this._isDaytime && previouslyDaytime) {
             console.log("--- Night Started (TimeService) ---");
             this.emit(TimeEvents.NightStarted);

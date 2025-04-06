@@ -65,7 +65,8 @@ export class LocationService {
         // Add work positions if they should directly connect to path
         LocationKeys.FarmerWorkPos, // Add Farmer work pos to path network
         LocationKeys.WinemakerWorkPos, // Equivalent to WineryDoor essentially
-        LocationKeys.ShopkeeperWorkPos // Equivalent to ShopDoor essentially
+        LocationKeys.ShopkeeperWorkPos, // Equivalent to ShopDoor essentially
+        LocationKeys.CustomerSpawnPoint // Add customer spawn point as valid path node
     ]);
 
     constructor() {
@@ -146,7 +147,7 @@ export class LocationService {
         const wpNorthJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 250); // Renamed variable, Level with Winery Door, junction for vineyard/winery path
         const wpEastJunction = new Phaser.Geom.Point(shopX + shopWidth / 2, 250); // Renamed variable
         const wpSouthJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2, 510); // New waypoint below MidJunction (410 + 100)
-        const wpSouthEastJunction = new Phaser.Geom.Point(wineryX + wineryWidth / 2 + 250, 510); // New waypoint SE of SouthJunction
+        const wpSouthEastJunction = new Phaser.Geom.Point(shopX + shopWidth / 2, 510); // New waypoint SE of SouthJunction
 
         this.locations.set(LocationKeys.WpSouthWestJunction, wpSouthWestJunction); // Renamed key and variable
         this.locations.set(LocationKeys.WpMidJunction, wpMidJunction);
@@ -156,10 +157,10 @@ export class LocationService {
         this.locations.set(LocationKeys.WpNorthJunction, wpNorthJunction); // Renamed key and variable
         this.locations.set(LocationKeys.WpEastJunction, wpEastJunction); // Renamed key and variable
 
-        // Customer points (off-screen)
+        // Customer points (just inside bounds)
         // Assuming scene dimensions are roughly 800x600
-        this.locations.set(LocationKeys.CustomerSpawnPoint, new Phaser.Geom.Point(shopX + shopWidth / 2, 650)); // Bottom edge, below shop
-        this.locations.set(LocationKeys.CustomerDespawnPoint, new Phaser.Geom.Point(850, shopY)); // Right edge, level with shop
+        this.locations.set(LocationKeys.CustomerSpawnPoint, new Phaser.Geom.Point(shopX + shopWidth / 2, 580)); // Bottom edge, just inside bounds
+        this.locations.set(LocationKeys.CustomerDespawnPoint, new Phaser.Geom.Point(780, shopY)); // Right edge, level with shop
 
         // Define path connections (Adjacency List)
         this.pathConnections.set(LocationKeys.FarmerHomeDoor, [LocationKeys.WpSouthWestJunction]); // Renamed key

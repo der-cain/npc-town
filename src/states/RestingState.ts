@@ -58,26 +58,6 @@ export default class RestingState implements NpcState {
         }
 
         console.log(`${this.npc.constructor.name} waking up due to DayStarted event.`);
-        if (this.npc.workPosition) {
-            const startPos = new Phaser.Math.Vector2(this.npc.x, this.npc.y);
-            const endPoint = this.npc.workPosition; // workPosition is already a Point
-            const endPos = new Phaser.Math.Vector2(endPoint.x, endPoint.y); // Convert Point to Vector2
-            // Find path from home door to work position using the keys stored on the NPC
-            const homeDoorKey = this.npc.homeDoorKey;
-            const workPosKey = this.npc.workPositionKey;
-
-            if (!homeDoorKey || !workPosKey) {
-                 console.error(`${this.npc.constructor.name} is missing homeDoorKey or workPositionKey. Cannot find path to work.`);
-                 this.npc.changeState(new IdleState()); // Go idle if keys are missing
-                 return;
-            }
-
-            const path = this.npc.currentScene.locationService.findPath(startPos, endPos, homeDoorKey, workPosKey);
-            // Transition to MovingState to go to work using the path
-            this.npc.changeState(new MovingState(), { path: path, purpose: 'MovingToWork' });
-        } else {
-            // No work position? Just become idle.
-            this.npc.changeState(new IdleState());
-        }
+        this.npc.handleStartDay();
     }
 }

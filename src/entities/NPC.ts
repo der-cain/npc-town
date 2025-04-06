@@ -3,13 +3,13 @@ import { Item } from '../data/items';
 import GameScene from '../scenes/GameScene'; // Still needed for adding to scene, physics, text
 import NpcState from '../states/NpcState';
 import IdleState from '../states/IdleState';
-import RestingState from '../states/RestingState';
+import RestingState from '../states/RestingState'; // Needed for instanceof check
 import MovingState from '../states/MovingState';
 import { TimeService, TimeEvents } from '../services/TimeService'; // Import TimeService
 
 const NPC_SPEED = 80; // Pixels per second
 
-export default class NPC extends Phaser.Physics.Arcade.Sprite {
+export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make class abstract
     public currentState!: NpcState;
     public inventory: Item | null = null;
     public currentScene: GameScene; // Made public for states/logic to access services easily
@@ -19,6 +19,9 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
     public workPosition: Phaser.Geom.Point | null = null; // Actual work location
     public homeDoorKey: string | null = null; // Key for the door near home (set by GameScene)
     public workPositionKey: string | null = null; // Key for the work position/area entry (set by GameScene)
+
+    // Abstract method for subclasses to define their start-of-day behavior
+    public abstract handleStartDay(): void;
 
     // Modified constructor to accept TimeService
     constructor(scene: GameScene, x: number, y: number, timeService: TimeService, texture: string | Phaser.Textures.Texture = 'npc_placeholder', frame?: string | number) {
@@ -39,8 +42,9 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         // Set initial state
         this.changeState(new RestingState());
 
-        // Listen for the GoHomeTime event
+        // Listen for TimeService events
         this.timeService.on(TimeEvents.GoHomeTime, this.handleGoHomeTime, this);
+        this.timeService.on(TimeEvents.StartWorkTime, this.handleStartWorkTime, this); // Listen for start work
     }
 
     // --- State Management ---
@@ -143,7 +147,7 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
     /** Handles the GoHomeTime event from TimeService */
     private handleGoHomeTime(): void {
         // Check if we are already resting or moving home
-        if (this.currentState instanceof RestingState) {
+        if (this.currentState instanceof RestingState) { // Check specific state
             return; // Already resting
         }
         if (this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome') {
@@ -168,6 +172,18 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
             this.changeState(new RestingState());
         }
     }
+
+    /** Handles the StartWorkTime event from TimeService */
+    private handleStartWorkTime(): void {
+        // Only trigger start-of-day behavior if currently resting
+        if (this.currentState instanceof RestingState) {
+            console.log(`${this.constructor.name} received StartWorkTime event while resting. Starting day.`);
+            this.handleStartDay(); // Call the abstract method
+        } else {
+            // console.log(`${this.constructor.name} received StartWorkTime event but not resting (state: ${this.currentState?.constructor.name}). Ignoring.`);
+        }
+    }
+
 
     // --- Update Loop ---
 
@@ -206,8 +222,9 @@ export default class NPC extends Phaser.Physics.Arcade.Sprite {
         }
         // Ensure state cleanup is called
         this.currentState?.exit(this);
-        // Remove event listener
+        // Remove event listeners
         this.timeService.off(TimeEvents.GoHomeTime, this.handleGoHomeTime, this);
+        this.timeService.off(TimeEvents.StartWorkTime, this.handleStartWorkTime, this); // Remove start work listener
         super.destroy(fromScene);
     }
 }

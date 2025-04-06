@@ -1,4 +1,4 @@
-import NPC from './NPC';
+import Worker from './Worker'; // Import Worker instead of NPC
 import GameScene from '../scenes/GameScene';
 import VineyardPlot from './VineyardPlot';
 import { TimeService } from '../services/TimeService';
@@ -8,7 +8,7 @@ import IdleState from '../states/IdleState';
 import MovingState from '../states/MovingState';
 import HarvestingState from '../states/HarvestingState'; // Assuming this will exist
 
-export default class Farmer extends NPC {
+export default class Farmer extends Worker { // Extend Worker
     public targetPlot: VineyardPlot | null = null; // Track the specific plot being targeted (Made public for state access)
     protected readonly maxInventory = 20; // How many grapes the farmer can carry (Made protected)
 

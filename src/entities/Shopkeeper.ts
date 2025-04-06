@@ -1,8 +1,11 @@
-import NPC from './NPC';
+import Worker from './Worker'; // Import Worker instead of NPC
 import GameScene from '../scenes/GameScene';
 import { TimeService } from '../services/TimeService'; // Import TimeService
+// Import necessary states and services
+import MovingState from '../states/MovingState';
+import { LocationKeys } from '../services/LocationService';
 
-export default class Shopkeeper extends NPC {
+export default class Shopkeeper extends Worker { // Extend Worker
     // Constructor now requires TimeService
     constructor(scene: GameScene, x: number, y: number, timeService: TimeService) {
         super(scene, x, y, timeService, 'npc_shopkeeper'); // Pass timeService to base constructor

@@ -1,5 +1,5 @@
 import Phaser from 'phaser'; // Import Phaser for Vector2
-import NPC from './NPC';
+import Worker from './Worker'; // Import Worker instead of NPC
 import GameScene from '../scenes/GameScene';
 import { TimeService } from '../services/TimeService';
 import { LocationKeys } from '../services/LocationService'; // Import LocationKeys
@@ -7,7 +7,7 @@ import { LocationKeys } from '../services/LocationService'; // Import LocationKe
 import IdleState from '../states/IdleState';
 import MovingState from '../states/MovingState';
 
-export default class Winemaker extends NPC {
+export default class Winemaker extends Worker { // Extend Worker
     public readonly batchSize = 5; // How many bottles to deliver at once (made public for potential state access)
 
     // Constructor now requires TimeService
