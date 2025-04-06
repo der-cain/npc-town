@@ -7,7 +7,9 @@ import Customer from '../entities/Customer'; // Import Customer
 import { WineryLogic } from '../logic/WineryLogic';
 import { ShopLogic } from '../logic/ShopLogic';
 import NPC from '../entities/NPC';
-import DespawnedState from '../states/customer/DespawnedState'; // Import DespawnedState for checking
+import RestingState from '../states/RestingState'; // Import RestingState for checking
+// DespawnedState is used in handleCustomerDespawning, keep it
+import DespawnedState from '../states/customer/DespawnedState';
 import EnteringShopState from '../states/customer/EnteringShopState'; // Import for initial state
 import { TimeService } from '../services/TimeService'; // Import TimeService
 import { UIManager } from '../ui/UIManager'; // Import UIManager
@@ -149,6 +151,9 @@ export default class GameScene extends Phaser.Scene {
 
     // --- Create Night Overlay via TimeService ---
     this.timeService.createNightOverlay();
+    this.timeService.startNightSkip();
+    this.uiManager.showSkipNightMessage();
+    this.time.timeScale = 20;
 
     // --- Add shutdown listeners ---
     // Note: Services/Managers now handle their own shutdown via scene events
@@ -180,6 +185,9 @@ export default class GameScene extends Phaser.Scene {
 
     // --- Customer Despawning Logic ---
     this.handleCustomerDespawning();
+
+    // --- Automatic Night Skip Logic ---
+    this.handleNightSkip(); // Call the new method
   }
 
   /** Handles spawning customers based on time and interval */
@@ -237,14 +245,83 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+   /** Checks conditions and manages the automatic night skip feature */
+   private handleNightSkip(): void {
+    const skipMultiplier = 20; // Define the multiplier
+
+    // --- Stop Skipping ---
+    if (this.timeService.isSkippingNight) {
+        // console.log(`DEBUG: Skipping night. Current time: ${this.timeService.currentTimeOfDay.toFixed(3)}, Threshold: ${this.timeService.dayStartThreshold}`); // Log check
+        // Stop when the *next* day's daytime actually starts
+        if (this.timeService.currentTimeOfDay >= this.timeService.dayStartThreshold && this.timeService.currentTimeOfDay < this.timeService.nightStartThreshold) { // Added check for < nightStartThreshold
+            console.log(`%cDay threshold reached (${this.timeService.currentTimeOfDay.toFixed(3)} >= ${this.timeService.dayStartThreshold} and < ${this.timeService.nightStartThreshold}), stopping night skip.`, 'color: orange'); // Updated log message for clarity
+            this.timeService.stopNightSkip(); // Clear the flag in TimeService
+            this.time.timeScale = 1; // Reset scene time scale directly
+            this.uiManager.hideSkipNightMessage();
+        }
+        // No need to check for starting skip if already skipping
+        return;
+    }
+
+    // --- Start Skipping ---
+    // Only check to start skipping if it's night and not already skipping
+    if (!this.timeService.isDaytime && this.timeService.currentTimeOfDay > 0.75) { // Check slightly later in the night
+        const farmerState = this.farmer.currentState.constructor.name;
+        const winemakerState = this.winemaker.currentState.constructor.name;
+        const shopkeeperState = this.shopkeeper.currentState.constructor.name;
+        const farmerResting = farmerState === 'RestingState';
+        const winemakerResting = winemakerState === 'RestingState';
+        const shopkeeperResting = shopkeeperState === 'RestingState';
+
+        // Check if all active customers are resting
+        let customerStates: string[] = [];
+        let allCustomersResting = true;
+        const activeCustomers = this.customerGroup.getChildren();
+        if (activeCustomers.length > 0) {
+             allCustomersResting = activeCustomers.every(customerGO => {
+                const customer = customerGO as Customer; // Cast to Customer
+                const stateName = customer.currentState.constructor.name;
+                customerStates.push(stateName); // Collect state names for logging
+                return stateName === 'RestingState';
+            });
+        } // If no customers, condition is trivially true
+
+        // Log states only once per second approx to avoid spam
+        if (Math.random() < 0.02) { // Roughly once every 50 frames at 60fps
+             console.log(`DEBUG: Night check: F:${farmerState}, W:${winemakerState}, S:${shopkeeperState}, Cust:[${customerStates.join(',')}] AllCustResting:${allCustomersResting}`);
+        }
+
+        // If all persistent NPCs and all active customers are resting
+        if (farmerResting && winemakerResting && shopkeeperResting && allCustomersResting) {
+            console.log(`%cAll NPCs are resting. Starting night skip (setting scene timeScale to ${skipMultiplier}).`, 'color: lightgreen');
+            this.timeService.startNightSkip(); // Set the flag in TimeService
+            this.time.timeScale = skipMultiplier; // Set scene time scale directly
+            this.uiManager.showSkipNightMessage();
+        }
+    }
+    // Removed the safety check that reset timescale to 1 outside of the stop condition
+  } // End of handleNightSkip
 
   /** Draws path graph, doors, and work positions for visualization */
   private drawDebugLocations(): void {
+      // Ensure LocationService is initialized before accessing properties
+      if (!this.locationService) {
+          console.warn("drawDebugLocations called before locationService is initialized.");
+          return;
+      }
       const pathNodes = this.locationService.pathNodesClone;
       const allLocations = this.locationService.locationsClone;
-      if (pathNodes.size === 0 && allLocations.size === 0) return;
+      // Check if maps are populated
+      if (!pathNodes || pathNodes.size === 0 || !allLocations || allLocations.size === 0) {
+           console.log("drawDebugLocations: No path nodes or locations to draw.");
+           return;
+      }
 
       const graphics = this.add.graphics();
+      if (!graphics) { // Check if graphics context was created
+          console.error("Failed to create graphics context for debug drawing.");
+          return;
+      }
       graphics.setDepth(1); // Draw below NPCs/UI but above background
 
       // --- Draw Path Connections ---
@@ -259,11 +336,13 @@ export default class GameScene extends Phaser.Scene {
                   if (point1 && point2) {
                       graphics.lineBetween(point1.x, point1.y, point2.x, point2.y);
                       drawnConnections.add(connectionKey);
+                  } else {
+                      // console.warn(`drawDebugLocations: Missing point for connection ${key1}-${key2}`);
                   }
               }
           });
       });
-      console.log('Drew path graph visualization.');
+      // console.log('Drew path graph visualization.'); // Reduce console noise
 
       // --- Draw Markers for All Locations ---
       const markerRadius = 3;
@@ -289,6 +368,6 @@ export default class GameScene extends Phaser.Scene {
               .setOrigin(0, 0.5)
               .setDepth(graphics.depth + 1); // Ensure label is above marker/path
       });
-      console.log('Drew location markers visualization.');
+      // console.log('Drew location markers visualization.'); // Reduce console noise
   }
-}
+} // End of GameScene class

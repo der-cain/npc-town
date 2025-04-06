@@ -20,7 +20,9 @@ export class UIManager {
     private timeService: TimeService;
     private locationService: LocationService; // Add LocationService
     private uiElements: Map<string, Phaser.GameObjects.Text> = new Map();
+    private skipNightText: Phaser.GameObjects.Text | null = null; // Text for skip message
     private uiTextStyle: Phaser.Types.GameObjects.Text.TextStyle;
+    private skipNightTextStyle: Phaser.Types.GameObjects.Text.TextStyle;
 
     // Updated constructor to accept LocationService
     constructor(scene: GameScene, wineryLogic: WineryLogic, shopLogic: ShopLogic, timeService: TimeService, locationService: LocationService) {
@@ -35,6 +37,15 @@ export class UIManager {
             color: '#ffffff',
             backgroundColor: '#000000',
             padding: { x: 2, y: 2 }
+        };
+
+        // Style for the skip night message
+        this.skipNightTextStyle = {
+            fontSize: '24px',
+            color: '#FFFF00', // Yellow
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            padding: { x: 10, y: 5 },
+            align: 'center'
         };
 
         // Listen for scene shutdown to clean up
@@ -68,6 +79,15 @@ export class UIManager {
         // Initial update
         this.updateInventoryTexts();
         this.updateTimeText();
+
+        // --- Create Skip Night Text (initially hidden) ---
+        const centerX = this.scene.cameras.main.width / 2;
+        const centerY = this.scene.cameras.main.height / 2;
+        this.skipNightText = this.scene.add.text(centerX, centerY, '', this.skipNightTextStyle)
+            .setOrigin(0.5, 0.5)
+            .setDepth(1100) // Above night overlay and other UI
+            .setVisible(false); // Start hidden
+
         console.log('UIManager finished creating UI elements.');
     }
 
@@ -85,6 +105,24 @@ export class UIManager {
         this.uiElements.get(UIKeys.TimeText)?.setText(`Time: ${formattedTime} (${dayNight})`);
     }
 
+    // --- Skip Night Message Control ---
+
+    /** Displays the 'Skipping Night...' message. */
+    public showSkipNightMessage(): void {
+        if (this.skipNightText) {
+            this.skipNightText.setText('Skipping Night...');
+            this.skipNightText.setVisible(true);
+        }
+    }
+
+    /** Hides the 'Skipping Night...' message. */
+    public hideSkipNightMessage(): void {
+        if (this.skipNightText) {
+            this.skipNightText.setVisible(false);
+            this.skipNightText.setText(''); // Clear text
+        }
+    }
+
     /** Cleans up UI elements and event listeners. */
     public shutdown(): void {
         console.log('UIManager shutting down...');
@@ -93,5 +131,11 @@ export class UIManager {
 
         this.uiElements.forEach(element => element.destroy());
         this.uiElements.clear();
+
+        // Destroy skip night text
+        if (this.skipNightText) {
+            this.skipNightText.destroy();
+            this.skipNightText = null;
+        }
     }
 }

@@ -13,11 +13,13 @@ export class TimeService extends Phaser.Events.EventEmitter {
     private dayLengthSeconds: number;
     private _currentTimeOfDay: number = 0.05; // Start just before dawn
     private _isDaytime: boolean = false; // Start as night
-    private nightStartThreshold: number;
-    private dayStartThreshold: number;
+    public nightStartThreshold: number; // Made public for GameScene access
+    public dayStartThreshold: number; // Made public for GameScene access
     private goHomeThreshold: number;
     private nightOverlay: Phaser.GameObjects.Rectangle | null = null;
     private maxNightAlpha: number = 0.6;
+    // Removed internal timeScale property
+    public isSkippingNight: boolean = false; // Flag for night skip state
 
     constructor(
         scene: Phaser.Scene,
@@ -58,10 +60,11 @@ export class TimeService extends Phaser.Events.EventEmitter {
     }
 
     // --- Core Logic ---
-
     private update(time: number, delta: number): void {
-        const deltaSeconds = delta / 1000;
+        // Time calculation now relies on the scene's time scale affecting delta
+        const deltaSeconds = (delta * this.scene.time.timeScale) / 1000;
         const previousTimeOfDay = this._currentTimeOfDay;
+        // Use standard deltaSeconds; scene.time.timeScale will affect the delta value passed in
         this._currentTimeOfDay += deltaSeconds / this.dayLengthSeconds;
         this._currentTimeOfDay %= 1.0; // Wrap around at 1.0 (midnight)
 
@@ -88,6 +91,26 @@ export class TimeService extends Phaser.Events.EventEmitter {
         this.emit(TimeEvents.TimeUpdate, this._currentTimeOfDay, delta); // Emit general update
 
         this.updateNightOverlay(); // Update visual effect
+    }
+
+    // --- Night Skip Control ---
+
+    /** Starts accelerating time for the night skip. */
+    public startNightSkip(): void { // Keep multiplier param for potential future use, but don't use it here
+        if (!this.isSkippingNight) {
+            console.log(`--- Starting Night Skip (Flag Set) ---`);
+            this.isSkippingNight = true;
+            // GameScene will handle scene.time.timeScale
+        }
+    }
+
+    /** Stops accelerating time and returns to normal speed. */
+    public stopNightSkip(): void {
+        if (this.isSkippingNight) {
+            console.log("--- Stopping Night Skip (Flag Cleared) ---");
+            this.isSkippingNight = false;
+            // GameScene will handle scene.time.timeScale
+        }
     }
 
     // --- Visuals ---
