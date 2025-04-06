@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Item, ItemType } from '../data/items';
 
 const PRODUCTION_TIME = 5000; // 5 seconds to produce wine
-const GRAPES_PER_WINE = 5; // How many grapes needed for 1 wine
+const GRAPES_PER_WINE = 3; // How many grapes needed for 1 wine
 
 /**
  * Manages the state and inventory of the Winery.
