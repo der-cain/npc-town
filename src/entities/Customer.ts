@@ -38,7 +38,6 @@ export default class Customer extends NPC {
         this.changeState(new EnteringShopState());
     }
 
-
     /**
      * Handles arrival logic specific to the Customer.
      * Determines the next state based on the purpose of the movement.

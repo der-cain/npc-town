@@ -11,6 +11,7 @@ const NPC_SPEED = 80; // Pixels per second
 
 export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make class abstract
     public currentState!: NpcState;
+    public previousStateBeforeResting: NpcState | null = null; // State before going to rest
     public inventory: Item | null = null;
     public currentScene: GameScene; // Made public for states/logic to access services easily
     public timeService: TimeService; // Made public for states to access
@@ -147,14 +148,10 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
     /** Handles the GoHomeTime event from TimeService */
     private handleGoHomeTime(): void {
         // Check if we are already resting or moving home
-        if (this.currentState instanceof RestingState) { // Check specific state
-            return; // Already resting
-        }
-        if (this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome') {
-            return; // Already moving home
+        if (this.currentState instanceof RestingState || (this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome')) {
+            return; // Already resting or moving home
         }
 
-        // If we have a home position, go there
         // If we have a home position and door key, find path home
         if (this.homePosition && this.homeDoorKey) {
             console.log(`${this.constructor.name} received GoHomeTime event! Finding path home.`);
@@ -169,6 +166,11 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
         } else {
             // No home position/key? Rest in place.
             console.log(`${this.constructor.name} received GoHomeTime event, but no home position. Resting in place.`);
+            // Ensure state is saved even if resting in place, *if* flag is set
+            if (!(this.currentState instanceof RestingState) && !(this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome')) {
+                this.previousStateBeforeResting = this.currentState;
+                console.log(`${this.constructor.name} saving state ${this.currentState.constructor.name} before resting in place (resume enabled).`);
+            }
             this.changeState(new RestingState());
         }
     }
@@ -177,10 +179,21 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
     private handleStartWorkTime(): void {
         // Only trigger start-of-day behavior if currently resting
         if (this.currentState instanceof RestingState) {
-            console.log(`${this.constructor.name} received StartWorkTime event while resting. Starting day.`);
-            this.handleStartDay(); // Call the abstract method
+            console.log(`${this.constructor.name} received StartWorkTime event while resting.`);
+            // Check if we should resume and if there's a state to resume
+            if (this.previousStateBeforeResting) {
+                console.log(`${this.constructor.name} should resume. Resuming previous state: ${this.previousStateBeforeResting.constructor.name}`);
+                const stateToResume = this.previousStateBeforeResting;
+                this.previousStateBeforeResting = null; // Clear before changing state
+                this.changeState(stateToResume);
+            } else {
+                // Either shouldn't resume (like Customer) or no state was saved
+                console.log(`${this.constructor.name} Calling specific handleStartDay.`);
+                this.handleStartDay(); // Call the specific NPC's start day logic
+                this.previousStateBeforeResting = null; // Ensure it's cleared
+            }
         } else {
-            // console.log(`${this.constructor.name} received StartWorkTime event but not resting (state: ${this.currentState?.constructor.name}). Ignoring.`);
+             // console.log(`${this.constructor.name} received StartWorkTime event but not resting (state: ${this.currentState?.constructor.name}). Ignoring.`);
         }
     }
 
