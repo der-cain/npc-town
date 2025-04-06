@@ -10,7 +10,7 @@ const CUSTOMER_BUY_CHANCE = 0.7; // 70% chance a customer buys if wine is availa
  */
 export class ShopLogic {
     private scene: Phaser.Scene;
-    public wineInventory: number = 0;
+    public wineInventory: number = 2; // Changed initial inventory to 2
     // private customerTimer?: Phaser.Time.TimerEvent; // Removed old timer
 
     // Define capacity limits (optional)

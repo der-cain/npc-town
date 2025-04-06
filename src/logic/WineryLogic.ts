@@ -11,7 +11,7 @@ const GRAPES_PER_WINE = 5; // How many grapes needed for 1 wine
 export class WineryLogic {
     private scene: Phaser.Scene;
     public grapeInventory: number = 0;
-    public wineInventory: number = 0;
+    public wineInventory: number = 5; // Changed initial inventory to 5
     public isProducing: boolean = false;
     private productionTimer?: Phaser.Time.TimerEvent;
 
