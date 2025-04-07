@@ -87,10 +87,23 @@ export default class HarvestingState implements NpcState {
             // Decide next action
             if (npc.inventory.quantity >= (npc as any).maxInventory) { // TODO: Fix maxInventory access
                 console.log('Farmer inventory full after harvest, moving to winery.');
-                // Use LocationService via scene
-                const targetPoint = (npc.scene as GameScene).locationService.getPoint(LocationKeys.WineryGrapeDropOff);
-                // No need to clear targetPlot here, exit() handles it.
-                npc.changeState(new MovingState(), { targetPosition: new Phaser.Math.Vector2(targetPoint.x, targetPoint.y), purpose: 'DeliveringGrapes' });
+                const gameScene = npc.scene as GameScene; // Cast scene once
+                const currentLocationVec = new Phaser.Math.Vector2(npc.x, npc.y); // Create Vector2
+                const targetPoint = gameScene.locationService.getPoint(LocationKeys.WineryGrapeDropOff); // Get Point
+                const targetPointVec = new Phaser.Math.Vector2(targetPoint.x, targetPoint.y); // Convert Point to Vector2
+
+                // Calculate the path using LocationService with Vector2 arguments and endKey
+                // Start key is omitted as current location might not be a specific node key
+                const path = gameScene.locationService.findPath(currentLocationVec, targetPointVec, undefined, LocationKeys.WineryGrapeDropOff);
+
+                if (path && path.length > 0) {
+                    // Pass the calculated path (array of Points) to MovingState
+                    npc.changeState(new MovingState(), { path: path, purpose: 'DeliveringGrapes' });
+                } else {
+                    // Use Vector2 for error logging consistency
+                    console.error(`Farmer could not find path from [${currentLocationVec.x.toFixed(0)}, ${currentLocationVec.y.toFixed(0)}] to WineryDropOff [${targetPointVec.x.toFixed(0)}, ${targetPointVec.y.toFixed(0)}]. Going Idle.`);
+                    npc.changeState(new IdleState()); // Fallback if pathfinding fails
+                }
             } else {
                 // Look for another plot immediately
                 console.log('Farmer looking for next plot.');

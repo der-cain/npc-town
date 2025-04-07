@@ -83,20 +83,22 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
      * Called by MovingState.enter()
      * @param target The target position vector.
      */
-    public setMovementTarget(target: Phaser.Math.Vector2): void {
+    public setMovementTarget(target: Phaser.Math.Vector2): boolean {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
             console.error(`${this.constructor.name} received invalid target for setMovementTarget:`, target);
             this.clearMovementTarget(); // Stop if target is invalid
-            return;
+            return false;
         }
         
         if(!this.hasReachedTarget(target, 5)) {
             console.log(`${this.constructor.name} setting physics move to [${target.x.toFixed(0)}, ${target.y.toFixed(0)}]`);
             this.currentScene.physics.moveTo(this, target.x, target.y, NPC_SPEED);
+            return true; // Return true to indicate movement was initiated
         } else {
             console.log(`${this.constructor.name} target already reached, stopping movement.`);
             this.setVelocity(0, 0); // Stop if already at the target
-        } 
+        }
+        return false; // Return false to indicate movement was not initiated
     }
 
     /**

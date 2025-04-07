@@ -24,6 +24,20 @@ export default class MovingState implements NpcState {
         return this._purpose;
     }
 
+    private setMovementTarget(npc: NPC): void {
+        let targetPoint = this.path[this.currentTargetIndex];
+        let targetVec = new Phaser.Math.Vector2(targetPoint?.x, targetPoint?.y);
+        while(!npc.setMovementTarget(targetVec)) {
+            this.currentTargetIndex++;
+            if (this.currentTargetIndex >= this.path.length) {
+                console.warn(`${npc.constructor.name} MovingState has no valid target point! `);
+                return;
+            }
+            targetPoint = this.path[this.currentTargetIndex];
+            targetVec = new Phaser.Math.Vector2(targetPoint?.x, targetPoint?.y);
+        };
+    }
+
     enter(npc: NPC, data?: any): void {
         // Expect data.path to be an array of Geom.Point, and optionally purpose/currentTargetIndex
         if (data && Array.isArray(data.path) && data.path.length > 0) {
@@ -59,7 +73,7 @@ export default class MovingState implements NpcState {
 
             // Log and initiate movement
             console.log(`${npc.constructor.name} starting path towards [${targetPoint.x.toFixed(0)}, ${targetPoint.y.toFixed(0)}] (point ${this.currentTargetIndex + 1}/${this.path.length}) for purpose: ${this._purpose}`);
-            npc.setMovementTarget(new Phaser.Math.Vector2(targetPoint.x, targetPoint.y));
+            this.setMovementTarget(npc);
 
         } else {
             // Invalid data provided
@@ -109,8 +123,7 @@ export default class MovingState implements NpcState {
                 }
                 console.log(`${npc.constructor.name} moving to next waypoint ${this.currentTargetIndex + 1}/${this.path.length} [${nextTargetPoint.x.toFixed(0)}, ${nextTargetPoint.y.toFixed(0)}]`);
                 // Convert Geom.Point to Vector2 for setMovementTarget
-                const nextTargetVec = new Phaser.Math.Vector2(nextTargetPoint.x, nextTargetPoint.y);
-                npc.setMovementTarget(nextTargetVec);
+                this.setMovementTarget(npc);
             } else {
                 // Reached the final destination (the point we just arrived at)
                 console.log(`${npc.constructor.name} reached final destination.`);
