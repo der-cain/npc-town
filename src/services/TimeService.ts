@@ -18,8 +18,12 @@ export class TimeService extends Phaser.Events.EventEmitter {
     private goHomeThreshold: number;
     private nightOverlay: Phaser.GameObjects.Rectangle | null = null;
     private maxNightAlpha: number = 0.6;
-    // Removed internal timeScale property
-    public isSkippingNight: boolean = false; // Flag for night skip state
+    // Separate time scales for day and night
+    private readonly defaultDayTimeScale: number = 1;
+    private readonly defaultNightTimeScale: number = 5; // Default night speed
+    public dayTimeScale: number = this.defaultDayTimeScale;
+    public nightTimeScale: number = this.defaultNightTimeScale;
+    // Removed isSkippingNight flag
 
     constructor(
         scene: Phaser.Scene,
@@ -37,6 +41,9 @@ export class TimeService extends Phaser.Events.EventEmitter {
 
         // Initialize state based on starting time
         this._isDaytime = this._currentTimeOfDay >= this.dayStartThreshold && this._currentTimeOfDay < this.nightStartThreshold;
+
+        // Apply the initial correct time scale based on starting time
+        this.applyCurrentTimeScale();
 
         // Listen for scene updates to run the time logic
         this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.update, this);
@@ -59,28 +66,91 @@ export class TimeService extends Phaser.Events.EventEmitter {
         return this._currentTimeOfDay >= this.goHomeThreshold && this._currentTimeOfDay < this.nightStartThreshold;
     }
 
+    /** Gets the time scale that *should* be active based on current time */
+    private getCurrentTargetTimeScale(): number {
+        return this._isDaytime ? this.dayTimeScale : this.nightTimeScale;
+    }
+
+    /** Applies the correct (day or night) time scale to the scene */
+    private applyCurrentTimeScale(): void {
+        const targetScale = this.getCurrentTargetTimeScale();
+        this.scene.time.timeScale = targetScale; // Apply to the scene's time
+        if (this.scene.physics.world) {
+            this.scene.physics.world.timeScale = 1.0 / targetScale;
+        }
+        // console.log(`TimeService: Applied ${this._isDaytime ? 'day' : 'night'} scale: ${targetScale}`); // Optional: for debugging
+    }
+
+    /**
+     * Adjusts the time scale for either day or night.
+     * @param scaleType 'day' or 'night'
+     * @param delta The amount to change the scale by (e.g., 0.5 or -0.5)
+     */
+    public adjustTimeScale(scaleType: 'day' | 'night', delta: number): void {
+        const minScale = 0.5; // Prevent going too slow or negative
+        if (scaleType === 'day') {
+            this.dayTimeScale = Math.max(minScale, this.dayTimeScale + delta);
+            console.log(`TimeService: Day time scale adjusted to ${this.dayTimeScale.toFixed(1)}`);
+        } else {
+            this.nightTimeScale = Math.max(minScale, this.nightTimeScale + delta);
+            console.log(`TimeService: Night time scale adjusted to ${this.nightTimeScale.toFixed(1)}`);
+        }
+        // Re-apply the current scale in case the adjusted one is now active
+        this.applyCurrentTimeScale();
+        this.emit('timeScaleChanged'); // Emit event for UI update
+    }
+
+    /**
+     * Resets the time scale for either day or night to its default.
+     * @param scaleType 'day' or 'night'
+     */
+    public resetTimeScale(scaleType: 'day' | 'night'): void {
+        if (scaleType === 'day') {
+            this.dayTimeScale = this.defaultDayTimeScale;
+            console.log(`TimeService: Day time scale reset to ${this.dayTimeScale}`);
+        } else {
+            this.nightTimeScale = this.defaultNightTimeScale;
+            console.log(`TimeService: Night time scale reset to ${this.nightTimeScale}`);
+        }
+        this.applyCurrentTimeScale();
+        this.emit('timeScaleChanged'); // Emit event for UI update
+    }
+
+
     // --- Core Logic ---
     private update(time: number, delta: number): void {
-        // Time calculation now relies on the scene's time scale affecting delta
-        const deltaSeconds = (delta * this.scene.time.timeScale) / 1000;
+        // console.log("Delta: ", delta);
+
+        // Apply the correct time scale for this frame *before* calculating deltaSeconds
+        this.applyCurrentTimeScale();
+        const currentScale = this.getCurrentTargetTimeScale();
+
+        // Time calculation uses the currently active time scale
+        const deltaSeconds = (delta / 1000) * currentScale;
+        // console.log("Delta Seconds: ", deltaSeconds);
+        
         const previousTimeOfDay = this._currentTimeOfDay;
-        // Use standard deltaSeconds; scene.time.timeScale will affect the delta value passed in
+        // Use the active scale for calculations
         this._currentTimeOfDay += deltaSeconds / this.dayLengthSeconds;
         this._currentTimeOfDay %= 1.0; // Wrap around at 1.0 (midnight)
+        // console.log("_currentTimeOfDay: ", this._currentTimeOfDay);
 
-        const previouslyDaytime = this._isDaytime;
-        this._isDaytime = this._currentTimeOfDay >= this.dayStartThreshold && this._currentTimeOfDay < this.nightStartThreshold;
+        const previouslyDaytime = this._isDaytime; // Keep track of state before update
+        this._isDaytime = this._currentTimeOfDay >= this.dayStartThreshold && this._currentTimeOfDay < this.nightStartThreshold; // Update current state
 
         const wasGoHomeTime = previousTimeOfDay >= this.goHomeThreshold && previousTimeOfDay < this.nightStartThreshold;
         const isNowGoHomeTime = this.isGoHomeTime;
 
-        // Emit events based on transitions
-        if (this._isDaytime && !previouslyDaytime) {
-            console.log("--- Day Started (TimeService) ---");
-            this.emit(TimeEvents.DayStarted); // For visual transition & NPC behavior start
-        } else if (!this._isDaytime && previouslyDaytime) {
-            console.log("--- Night Started (TimeService) ---");
-            this.emit(TimeEvents.NightStarted);
+        // Apply the new time scale immediately if the day/night state flipped
+        if (this._isDaytime !== previouslyDaytime) {
+            this.applyCurrentTimeScale(); // Apply the scale for the new period
+            if (this._isDaytime) {
+                console.log("--- Day Started (TimeService) ---");
+                this.emit(TimeEvents.DayStarted);
+            } else {
+                console.log("--- Night Started (TimeService) ---");
+                this.emit(TimeEvents.NightStarted);
+            }
         }
 
         if (isNowGoHomeTime && !wasGoHomeTime) {
@@ -93,25 +163,8 @@ export class TimeService extends Phaser.Events.EventEmitter {
         this.updateNightOverlay(); // Update visual effect
     }
 
-    // --- Night Skip Control ---
-
-    /** Starts accelerating time for the night skip. */
-    public startNightSkip(): void { // Keep multiplier param for potential future use, but don't use it here
-        if (!this.isSkippingNight) {
-            console.log(`--- Starting Night Skip (Flag Set) ---`);
-            this.isSkippingNight = true;
-            // GameScene will handle scene.time.timeScale
-        }
-    }
-
-    /** Stops accelerating time and returns to normal speed. */
-    public stopNightSkip(): void {
-        if (this.isSkippingNight) {
-            console.log("--- Stopping Night Skip (Flag Cleared) ---");
-            this.isSkippingNight = false;
-            // GameScene will handle scene.time.timeScale
-        }
-    }
+    // --- Night Skip Control (REMOVED) ---
+    // The adjustable day/night speeds replace the old skip logic.
 
     // --- Visuals ---
 
