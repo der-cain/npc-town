@@ -1,14 +1,9 @@
 import Phaser from 'phaser';
-import NPC from '../entities/NPC';
+import NPC, { NPC_SPEED } from '../entities/NPC'; // Import NPC_SPEED
 import NpcState from './NpcState';
-import GameScene from '../scenes/GameScene';
 // Import other states only if needed for direct transitions *within* MovingState (unlikely now)
 import IdleState from './IdleState';
 // No longer need specific state/NPC imports here for arrival logic
-// import RestingState from './RestingState';
-// import HarvestingState from '../states/HarvestingState';
-// import Farmer from '../entities/Farmer';
-// import Winemaker from '../entities/Winemaker';
 
 
 /**
@@ -41,21 +36,15 @@ export default class MovingState implements NpcState {
                  this.currentTargetIndex = data.currentTargetIndex;
                  console.log(`  -> Resuming at index: ${this.currentTargetIndex}`);
             } else {
-                // Calculate initial target index based on current position
-                const firstPoint = this.path[0];
-                if (!firstPoint) { // Should not happen due to outer check, but safety first
-                    console.error(`${npc.constructor.name} MovingState path is unexpectedly empty after validation! Transitioning to Idle.`);
-                    npc.changeState(new IdleState());
-                    return;
-                }
-                 // Start at index 1 if already very close to index 0 and path has more points
-                this.currentTargetIndex = (this.path.length > 1 && Phaser.Math.Distance.BetweenPointsSquared(npc, firstPoint) < 1) ? 1 : 0;
-                console.log(`  -> Calculated start index: ${this.currentTargetIndex}`);
+                // Always start at the beginning of the provided path (index 0)
+                // The path from LocationService now correctly starts with the NPC's current position.
+                this.currentTargetIndex = 0;
+                console.log(`  -> Starting at index: ${this.currentTargetIndex}`);
             }
 
-            // Validate the final target index
+            // Validate the target index (should always be 0 or a valid resumption index now)
             if (this.currentTargetIndex < 0 || this.currentTargetIndex >= this.path.length) {
-                console.warn(`${npc.constructor.name} MovingState has invalid target index ${this.currentTargetIndex} for path length ${this.path.length}. Transitioning to Idle.`);
+                console.warn(`${npc.constructor.name} MovingState has invalid target index ${this.currentTargetIndex} for path length ${this.path.length} (Path: ${JSON.stringify(this.path)}). Transitioning to Idle.`);
                 npc.changeState(new IdleState());
                 return;
             }
@@ -97,7 +86,6 @@ export default class MovingState implements NpcState {
              npc.changeState(new IdleState());
              return;
         }
-        // Convert Geom.Point to Vector2 for hasReachedTarget
         const currentTargetVec = new Phaser.Math.Vector2(currentTargetPoint.x, currentTargetPoint.y);
 
         // Check for arrival at the current waypoint
@@ -121,7 +109,8 @@ export default class MovingState implements NpcState {
                 }
                 console.log(`${npc.constructor.name} moving to next waypoint ${this.currentTargetIndex + 1}/${this.path.length} [${nextTargetPoint.x.toFixed(0)}, ${nextTargetPoint.y.toFixed(0)}]`);
                 // Convert Geom.Point to Vector2 for setMovementTarget
-                npc.setMovementTarget(new Phaser.Math.Vector2(nextTargetPoint.x, nextTargetPoint.y));
+                const nextTargetVec = new Phaser.Math.Vector2(nextTargetPoint.x, nextTargetPoint.y);
+                npc.setMovementTarget(nextTargetVec);
             } else {
                 // Reached the final destination (the point we just arrived at)
                 console.log(`${npc.constructor.name} reached final destination.`);

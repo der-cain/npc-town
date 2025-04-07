@@ -194,9 +194,10 @@ export default class GameScene extends Phaser.Scene {
     // Check if it's daytime (8:00 - 16:00)
     const currentTime = this.timeService.currentTimeOfDay;
     const isShopOpen = currentTime >= (8 / 24) && currentTime < (16 / 24);
+    const deltaScaled = delta * this.timeService.getCurrentTargetTimeScale();
 
     if (isShopOpen) {
-        this.customerSpawnTimer += delta;
+        this.customerSpawnTimer += deltaScaled;
         if (this.customerSpawnTimer >= this.customerSpawnInterval) {
             this.customerSpawnTimer = 0; // Reset timer
 

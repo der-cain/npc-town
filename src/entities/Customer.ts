@@ -5,10 +5,8 @@ import { TimeService } from '../services/TimeService';
 // Import customer states
 import BuyingWineState from '../states/customer/BuyingWineState';
 import DespawnedState from '../states/customer/DespawnedState'; // Needed for handleStartDay and handleGoHomeTime
-import EnteringShopState from '@/states/customer/EnteringShopState';
 // Import base states needed
 import NpcState from '../states/NpcState';
-import RestingState from '../states/RestingState';
 
 
 export default class Customer extends NPC {

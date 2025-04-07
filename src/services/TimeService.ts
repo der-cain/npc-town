@@ -67,7 +67,7 @@ export class TimeService extends Phaser.Events.EventEmitter {
     }
 
     /** Gets the time scale that *should* be active based on current time */
-    private getCurrentTargetTimeScale(): number {
+    public getCurrentTargetTimeScale(): number {
         return this._isDaytime ? this.dayTimeScale : this.nightTimeScale;
     }
 

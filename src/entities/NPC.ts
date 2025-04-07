@@ -7,7 +7,7 @@ import RestingState from '../states/RestingState'; // Needed for instanceof chec
 import MovingState from '../states/MovingState';
 import { TimeService, TimeEvents } from '../services/TimeService'; // Import TimeService
 
-const NPC_SPEED = 80; // Pixels per second
+export const NPC_SPEED = 80; // Pixels per second // Export the constant
 
 // Define an interface for storing state information for resumption
 interface StoredStateInfo {
@@ -89,8 +89,14 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
             this.clearMovementTarget(); // Stop if target is invalid
             return;
         }
-        // console.log(`${this.constructor.name} setting physics move to [${target.x.toFixed(0)}, ${target.y.toFixed(0)}]`);
-        this.currentScene.physics.moveTo(this, target.x, target.y, NPC_SPEED);
+        
+        if(!this.hasReachedTarget(target, 5)) {
+            console.log(`${this.constructor.name} setting physics move to [${target.x.toFixed(0)}, ${target.y.toFixed(0)}]`);
+            this.currentScene.physics.moveTo(this, target.x, target.y, NPC_SPEED);
+        } else {
+            console.log(`${this.constructor.name} target already reached, stopping movement.`);
+            this.setVelocity(0, 0); // Stop if already at the target
+        } 
     }
 
     /**
@@ -161,20 +167,29 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
             return; // Already resting or moving home
         }
 
+        console.log(`${this.constructor.name} [${this.x.toFixed(0)}, ${this.y.toFixed(0)}] received GoHomeTime event!`); // Log position at start
+
         // If we have a home position and door key, find path home
         if (this.homePosition && this.homeDoorKey) {
-            console.log(`${this.constructor.name} received GoHomeTime event! Finding path home.`);
-            const startPos = new Phaser.Math.Vector2(this.x, this.y);
+            console.log(`  -> Finding path home.`);
+            const startPos = new Phaser.Math.Vector2(this.x, this.y); // Position used for path calc
             const endPos = new Phaser.Math.Vector2(this.homePosition.x, this.homePosition.y);
             // Assume starting from work position key, find path to home door key
             // Pass undefined if keys are null
-            const startKey = this.workPositionKey ?? undefined;
-            const endKey = this.homeDoorKey ?? undefined;
+            const startKey = this.workPositionKey ?? undefined; // Use work key if available
+            const endKey = this.homeDoorKey ?? undefined; // Use home key if available
+
+            // Log position just before pathfinding
+            console.log(`  -> Position before findPath: [${this.x.toFixed(0)}, ${this.y.toFixed(0)}]`);
             const path = this.currentScene.locationService.findPath(startPos, endPos, startKey, endKey);
-            // Intentially do not save the previousStateBeforeResting if we have a homePosition and homeDoorKey
+
+            // Log position just before changing state
+            console.log(`  -> Position before changeState: [${this.x.toFixed(0)}, ${this.y.toFixed(0)}]`);
+            // Intentionally do not save the previousStateBeforeResting if we have a homePosition and homeDoorKey
             this.changeState(new MovingState(), { path: path, purpose: 'MovingHome' });
         } else {
             // No home position/key? Rest in place.
+            console.log(`  -> No home position/key. Resting in place.`);
             console.log(`${this.constructor.name} received GoHomeTime event, but no home position. Resting in place.`);
             // Save state info if not already resting/moving home
             if (!(this.currentState instanceof RestingState) && !(this.currentState instanceof MovingState && this.currentState.purpose === 'MovingHome')) {

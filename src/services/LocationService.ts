@@ -319,46 +319,65 @@ export class LocationService {
             // --- End BFS ---
 
             if (foundPathKeys) {
-                // Convert keys back to points
-                const pointPath = foundPathKeys.map(key => this.locations.get(key)).filter(p => p !== undefined) as Phaser.Geom.Point[];
+                // Convert keys back to points, ensuring they exist
+                const bfsPoints = foundPathKeys
+                    .map(key => this.locations.get(key))
+                    .filter((p): p is Phaser.Geom.Point => p !== undefined) // Type guard
+                    .map(p => Phaser.Geom.Point.Clone(p)); // Clone points
 
-                // Prepend actual start point, append actual end point
-                const finalPath = [
-                    new Phaser.Geom.Point(startPoint.x, startPoint.y),
-                    ...pointPath.map(p => Phaser.Geom.Point.Clone(p)), // Clone points from path
-                    new Phaser.Geom.Point(endPoint.x, endPoint.y)
-                ];
+                if (bfsPoints.length === 0) {
+                     console.warn(`BFS found keys but no valid points for path from ${startKey} to ${endKey}. Returning direct path.`);
+                     return [new Phaser.Geom.Point(startPoint.x, startPoint.y), new Phaser.Geom.Point(endPoint.x, endPoint.y)];
+                }
 
-                // Optional: Smooth path by removing redundant intermediate points
-                // Only smooth if the path has intermediate nodes (length >= 3: start, node, end)
-                if (finalPath.length >= 3) {
-                    const firstNode = finalPath[1]; // First node from BFS result
-                    const startPointNode = finalPath[0]; // Actual start point
+                // Find the index of the BFS node closest to the actual startPoint
+                let closestNodeIndex = 0;
+                // Ensure bfsPoints[0] exists before calculating distance
+                let minDistanceSq = bfsPoints[0] ? Phaser.Math.Distance.BetweenPointsSquared(startPoint, bfsPoints[0]) : Infinity;
 
-                    // Check if start point is very close to the first BFS node
-                    if (firstNode && startPointNode && Phaser.Math.Distance.BetweenPointsSquared(startPointNode, firstNode) < 1) {
-                        finalPath.splice(1, 1); // Remove the first BFS node
+                for (let i = 1; i < bfsPoints.length; i++) {
+                    // Ensure bfsPoints[i] exists before calculating distance
+                    const currentPoint = bfsPoints[i];
+                    if (!currentPoint) continue; // Skip if point is somehow undefined
+
+                    const distSq = Phaser.Math.Distance.BetweenPointsSquared(startPoint, currentPoint);
+                    if (distSq < minDistanceSq) {
+                        minDistanceSq = distSq;
+                        closestNodeIndex = i;
                     }
                 }
-                 // Check only if path still has at least start + end + one node (length >= 3 after potential first splice)
-                 if (finalPath.length >= 3) {
-                    const secondLastNode = finalPath[finalPath.length - 2]; // Second-to-last node (might be a BFS node or the start point)
-                    const lastNode = finalPath[finalPath.length - 1]; // Actual end point
 
-                    // Check if end point is very close to the second-to-last node
-                    if (secondLastNode && lastNode && Phaser.Math.Distance.BetweenPointsSquared(secondLastNode, lastNode) < 1) {
-                         // Remove the second-to-last node ONLY if it's not the start point itself
-                         if (finalPath.length > 2) { // Ensure we don't remove the start point if it's the only one left besides the end
-                            finalPath.splice(finalPath.length - 2, 1);
-                         }
+                // Construct the final path: startPoint -> closestNode -> ... -> endKeyNode -> endPoint
+                const finalPath: Phaser.Geom.Point[] = [
+                    new Phaser.Geom.Point(startPoint.x, startPoint.y), // Actual start
+                    // Add points from the closest node onwards
+                    ...bfsPoints.slice(closestNodeIndex),
+                    new Phaser.Geom.Point(endPoint.x, endPoint.y) // Actual end
+                ];
+
+                // Optional: Remove the closestNode if it's virtually identical to the startPoint
+                // Ensure both points exist before comparing
+                if (finalPath.length >= 2 && finalPath[0] && finalPath[1] && Phaser.Math.Distance.BetweenPointsSquared(finalPath[0], finalPath[1]) < 1) {
+                    finalPath.splice(1, 1); // Remove the closest node point
+                }
+
+                // Optional: Remove the endKeyNode (now second-to-last) if it's virtually identical to the endPoint
+                // Ensure both points exist before comparing
+                const lastIndex = finalPath.length - 1;
+                if (finalPath.length >= 2) {
+                    const secondLastPoint = finalPath[lastIndex - 1];
+                    const lastPoint = finalPath[lastIndex];
+                    // Check if both points exist and are close
+                    if (secondLastPoint && lastPoint && Phaser.Math.Distance.BetweenPointsSquared(secondLastPoint, lastPoint) < 1) {
+                        finalPath.splice(lastIndex - 1, 1); // Remove the node before the end point
                     }
-                 }
+                }
 
 
-                console.log(`Graph path found with ${finalPath.length} points.`);
+                console.log(`Graph path found with ${finalPath.length} points (starting from closest node index ${closestNodeIndex}).`);
                 return finalPath;
             } else {
-                console.warn(`BFS could not find path from ${startKey} to ${endKey}. Returning direct path.`);
+                console.warn(`BFS could not find path keys from ${startKey} to ${endKey}. Returning direct path.`);
                 return [new Phaser.Geom.Point(startPoint.x, startPoint.y), new Phaser.Geom.Point(endPoint.x, endPoint.y)];
             }
 
