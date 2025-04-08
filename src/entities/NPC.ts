@@ -114,15 +114,57 @@ export default abstract class NPC extends Phaser.Physics.Arcade.Sprite { // Make
 
     /**
      * Checks if the NPC has reached a target position within a given threshold.
+     * Checks if the NPC has reached or passed a target position.
+     * Considers both distance and direction of movement relative to the target.
      * Called by MovingState.update()
      * @param target The target position vector to check against.
      * @param threshold The maximum distance allowed to be considered "at" the target.
-     * @returns True if the distance is within the threshold, false otherwise.
+     * @returns True if the NPC is within the threshold and no longer moving towards the target, false otherwise.
      */
     public hasReachedTarget(target: Phaser.Math.Vector2, threshold: number = 5): boolean {
-        if (!target) return false;
-        const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
-        return distance < threshold;
+        // Ensure target and physics body are valid
+        if (!target || !this.body) {
+            console.warn(`${this.constructor.name} hasReachedTarget called with invalid target or missing body.`);
+            return false;
+        }
+
+        const currentPos = new Phaser.Math.Vector2(this.x, this.y);
+        const distance = Phaser.Math.Distance.Between(currentPos.x, currentPos.y, target.x, target.y);
+        const isCloseEnough = distance < threshold;
+
+        if (isCloseEnough) {
+            return true; // Close enough, consider it reached
+        }
+
+        // console.log(`${this.constructor.name} potential overshooting detected: [${currentPos.x.toFixed(0)}, ${currentPos.y.toFixed(0)}] to [${target.x.toFixed(0)}, ${target.y.toFixed(0)}] distance: ${distance.toFixed(2)}`);
+
+        // If not close enough, check if we are moving towards the target
+        const velocity = this.body.velocity;
+
+        // If velocity is zero, we've stopped or we didn't start moving
+        if (velocity.lengthSq() === 0) { // Use lengthSq for efficiency
+            return false;
+        }
+
+        // Calculate the vector pointing from the current position to the target
+        const vecToTarget = target.clone().subtract(currentPos);
+
+        // If we are *exactly* at the target, vecToTarget might be zero.
+        if (vecToTarget.lengthSq() === 0) {
+            return true;
+        }
+
+        // Calculate the dot product of velocity and the vector to the target.
+        // A positive dot product means the velocity has a component *towards* the target.
+        // A zero or negative dot product means the velocity is perpendicular or away from the target.
+        const dotProduct = velocity.dot(vecToTarget);
+        if(dotProduct <= 0) {
+            console.log(`${this.constructor.name} dot product: ${dotProduct.toFixed(2)} (velocity: [${velocity.x.toFixed(0)}, ${velocity.y.toFixed(0)}], vecToTarget: [${vecToTarget.x.toFixed(0)}, ${vecToTarget.y.toFixed(0)}])`);
+        }
+
+        // We've reached the target if we are close enough AND
+        // the dot product is <= 0 (meaning we are moving away, perpendicular, or stopped).
+        return dotProduct <= 0;
     }
 
     /**
